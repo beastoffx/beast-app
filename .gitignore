@@ -12,14 +12,21 @@ data/*.db-shm
 backend/src/uploads/*
 !backend/src/uploads/.gitkeep
 
-# Flutter / Dart
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.packages
-build/
-.pub-cache/
-.pub/
+# Flutter / Dart / Gradle
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/build/
+**/.pub-cache/
+**/.pub/
+**/.gradle/
+**/local.properties
+*.log
+backend/data/*.db
+backend/data/*.db-journal
+backend/data/*.db-wal
+backend/data/*.db-shm
 
 # IDE & OS
 .idea/
