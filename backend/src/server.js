@@ -9,6 +9,7 @@ const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 // Route imports
 const authRoutes = require('./routes/authRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 const academicsRoutes = require('./routes/academicsRoutes');
 const timetableRoutes = require('./routes/timetableRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
@@ -32,10 +33,45 @@ function createApp() {
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' }
   }));
+  // Production-grade CORS policy
+  const allowedOrigins = config.corsOrigins || [];
   app.use(cors({
-    origin: '*',
+    origin: (origin, callback) => {
+      // 1. Allow mobile apps and native non-browser clients (which do not send an Origin header)
+      if (!origin) return callback(null, true);
+
+      // 2. Allow local development origins in development/test environments
+      if (config.nodeEnv !== 'production') {
+        if (/^https?:\/\/localhost(:\d+)?$/.test(origin) || /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) {
+          return callback(null, true);
+        }
+      }
+
+      // 3. Allow explicitly configured production origins
+      if (allowedOrigins.length > 0) {
+        const isAllowed = allowedOrigins.some(allowed => {
+          if (allowed === '*') return true;
+          if (allowed.startsWith('*.')) {
+            const domain = allowed.slice(2);
+            return origin.endsWith(domain);
+          }
+          return origin === allowed;
+        });
+        if (isAllowed) return callback(null, true);
+        return callback(new Error(`Origin ${origin} is not allowed by CORS policy.`));
+      }
+
+      // Default in non-production with no origins configured: allow
+      if (config.nodeEnv !== 'production') {
+        return callback(null, true);
+      }
+
+      // Production default with no origins specified: reject unknown browser origins
+      return callback(new Error(`Origin ${origin} is not allowed by CORS policy.`));
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: true
   }));
 
   // Body parsers
@@ -62,6 +98,7 @@ function createApp() {
 
   // Mount API modules
   app.use('/api/auth', authRoutes);
+  app.use('/api/admins', adminRoutes);
   app.use('/api/academics', academicsRoutes);
   app.use('/api/timetable', timetableRoutes);
   app.use('/api/attendance', attendanceRoutes);

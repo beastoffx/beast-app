@@ -41,7 +41,6 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     final todayClasses = teacher.todayClasses;
     final pendingReviews = teacher.dashboardData?['pendingReviews'] as List? ?? [];
     final pendingDoubts = teacher.dashboardData?['pendingDoubts'] as List? ?? [];
-    final notices = teacher.dashboardData?['recentNotices'] as List? ?? [];
 
     return RefreshIndicator(
       onRefresh: () => teacher.fetchDashboard(),

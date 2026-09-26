@@ -4,6 +4,7 @@ import '../core/services/api_service.dart';
 import '../models/academic_models.dart';
 import '../models/fee_exam_model.dart';
 import '../models/material_notice_model.dart';
+import '../models/user_model.dart';
 
 class AdminProvider with ChangeNotifier {
   final ApiService _api = ApiService();
@@ -328,5 +329,257 @@ class AdminProvider with ChangeNotifier {
       _auditLogs = res.data as List? ?? [];
     }
     notifyListeners();
+  }
+
+  // ==================== ADMINISTRATOR MANAGEMENT ====================
+  List<AdminUserModel> _admins = [];
+  List<AdminUserModel> get admins => _admins;
+
+  Future<void> fetchAdmins({String? search, String? status}) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    String endpoint = ApiConstants.admins;
+    final params = <String>[];
+    if (search != null && search.isNotEmpty) params.add('search=${Uri.encodeComponent(search)}');
+    if (status != null && status.isNotEmpty) params.add('status=${Uri.encodeComponent(status)}');
+    if (params.isNotEmpty) endpoint += '?${params.join('&')}';
+
+    final res = await _api.get(endpoint);
+    _isLoading = false;
+    if (res.success && res.data != null) {
+      final list = res.data['admins'] as List? ?? [];
+      _admins = list.map((a) => AdminUserModel.fromJson(a)).toList();
+    } else {
+      _errorMessage = res.error;
+    }
+    notifyListeners();
+  }
+
+  Future<bool> createAdmin({
+    required String name,
+    required String email,
+    required String password,
+    String? phone,
+    String? department,
+    String? designation,
+    String? employeeId,
+    Map<String, dynamic>? permissions,
+  }) async {
+    final res = await _api.post(ApiConstants.admins, {
+      'name': name,
+      'email': email,
+      'password': password,
+      'phone': phone,
+      'department': department,
+      'designation': designation,
+      'employee_id': employeeId,
+      'permissions': permissions,
+    });
+    if (res.success) {
+      await fetchAdmins();
+      return true;
+    }
+    _errorMessage = res.error;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> updateAdmin(
+    String id, {
+    String? name,
+    String? phone,
+    String? department,
+    String? designation,
+    Map<String, dynamic>? permissions,
+  }) async {
+    final res = await _api.put('${ApiConstants.admins}/$id', {
+      'name': name,
+      'phone': phone,
+      'department': department,
+      'designation': designation,
+      'permissions': permissions,
+    });
+    if (res.success) {
+      await fetchAdmins();
+      return true;
+    }
+    _errorMessage = res.error;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> suspendAdmin(String id, String reason) async {
+    final res = await _api.post('${ApiConstants.admins}/$id/suspend', {'reason': reason});
+    if (res.success) {
+      await fetchAdmins();
+      return true;
+    }
+    _errorMessage = res.error;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> restoreAdmin(String id) async {
+    final res = await _api.post('${ApiConstants.admins}/$id/restore', {});
+    if (res.success) {
+      await fetchAdmins();
+      return true;
+    }
+    _errorMessage = res.error;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> archiveAdmin(String id, String reason) async {
+    final res = await _api.post('${ApiConstants.admins}/$id/archive', {'reason': reason});
+    if (res.success) {
+      await fetchAdmins();
+      return true;
+    }
+    _errorMessage = res.error;
+    notifyListeners();
+    return false;
+  }
+
+  Future<List<dynamic>> fetchAdminAudit(String id) async {
+    final res = await _api.get('${ApiConstants.admins}/$id/audit');
+    if (res.success && res.data != null) {
+      return res.data['auditLogs'] as List? ?? [];
+    }
+    return [];
+  }
+
+  // ==================== STUDENT LIFECYCLE MANAGEMENT ====================
+  List<dynamic> _studentsList = [];
+  List<dynamic> get studentsList => _studentsList;
+
+  Future<void> fetchStudentsFiltered({
+    String? search,
+    String? status,
+    String? subscriptionStatus,
+    String? classId,
+    String? batchId,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    String endpoint = ApiConstants.academicsStudents;
+    final params = <String>[];
+    if (search != null && search.isNotEmpty) params.add('search=${Uri.encodeComponent(search)}');
+    if (status != null && status.isNotEmpty) params.add('status=${Uri.encodeComponent(status)}');
+    if (subscriptionStatus != null && subscriptionStatus.isNotEmpty) {
+      params.add('subscription_status=${Uri.encodeComponent(subscriptionStatus)}');
+    }
+    if (classId != null && classId.isNotEmpty) params.add('class_id=${Uri.encodeComponent(classId)}');
+    if (batchId != null && batchId.isNotEmpty) params.add('batch_id=${Uri.encodeComponent(batchId)}');
+    if (params.isNotEmpty) endpoint += '?${params.join('&')}';
+
+    final res = await _api.get(endpoint);
+    _isLoading = false;
+    if (res.success && res.data != null) {
+      _studentsList = res.data as List? ?? [];
+      _students = _studentsList;
+    } else {
+      _errorMessage = res.error;
+    }
+    notifyListeners();
+  }
+
+  Future<Map<String, dynamic>?> fetchStudentDetail(String id) async {
+    final res = await _api.get('${ApiConstants.academicsStudents}/$id');
+    if (res.success && res.data != null) {
+      return res.data['data'] as Map<String, dynamic>?;
+    }
+    return null;
+  }
+
+  Future<bool> suspendStudent(String id, String reason) async {
+    final res = await _api.post('${ApiConstants.academicsStudents}/$id/suspend', {'reason': reason});
+    if (res.success) {
+      await fetchStudentsFiltered();
+      return true;
+    }
+    _errorMessage = res.error;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> restoreStudent(String id) async {
+    final res = await _api.post('${ApiConstants.academicsStudents}/$id/restore', {});
+    if (res.success) {
+      await fetchStudentsFiltered();
+      return true;
+    }
+    _errorMessage = res.error;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> archiveStudent(String id, String reason) async {
+    final res = await _api.post('${ApiConstants.academicsStudents}/$id/archive', {'reason': reason});
+    if (res.success) {
+      await fetchStudentsFiltered();
+      return true;
+    }
+    _errorMessage = res.error;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> updateStudentSubscription(
+    String id, {
+    required String subscriptionStatus,
+    String? accessStartDate,
+    String? accessEndDate,
+    Map<String, dynamic>? resourcePermissions,
+  }) async {
+    final res = await _api.put('${ApiConstants.academicsStudents}/$id/subscription', {
+      'subscription_status': subscriptionStatus,
+      'access_start_date': accessStartDate,
+      'access_end_date': accessEndDate,
+      'resource_permissions': resourcePermissions,
+    });
+    if (res.success) {
+      await fetchStudentsFiltered();
+      return true;
+    }
+    _errorMessage = res.error;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> updateStudentProfile(
+    String id, {
+    String? name,
+    String? phone,
+    String? emergencyContact,
+    String? classId,
+    String? batchId,
+  }) async {
+    final res = await _api.put('${ApiConstants.academicsStudents}/$id', {
+      'name': name,
+      'phone': phone,
+      'emergency_contact': emergencyContact,
+      'class_id': classId,
+      'batch_id': batchId,
+    });
+    if (res.success) {
+      await fetchStudentsFiltered();
+      return true;
+    }
+    _errorMessage = res.error;
+    notifyListeners();
+    return false;
+  }
+
+  Future<List<dynamic>> fetchStudentAudit(String id) async {
+    final res = await _api.get('${ApiConstants.academicsStudents}/$id/audit');
+    if (res.success && res.data != null) {
+      return res.data['auditLogs'] as List? ?? [];
+    }
+    return [];
   }
 }

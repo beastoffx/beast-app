@@ -4,6 +4,7 @@ const { authenticateToken } = require('../middleware/auth');
 const { authorizeRoles } = require('../middleware/rbac');
 const { logAudit } = require('../middleware/audit');
 const upload = require('../middleware/upload');
+const { StorageService } = require('../services/storageService');
 
 const router = express.Router();
 
@@ -220,6 +221,35 @@ router.put('/:id/resolve', authenticateToken, authorizeRoles('student'), (req, r
   res.json({
     success: true,
     message: is_resolved ? 'Doubt marked as resolved! Great job.' : 'Doubt marked as still unclear. Discussion reopened.'
+  });
+});
+
+// GET /api/doubts/:id/image-url - Authorized private image access
+router.get('/:id/image-url', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const doubt = get('SELECT id, student_id, image_url, subject_id, batch_id FROM doubts WHERE id = ?', [id]);
+  if (!doubt || !doubt.image_url) {
+    return res.status(404).json({ success: false, error: 'Doubt image not found.' });
+  }
+
+  // If student, check that user is owner or enrolled in the same batch
+  if (req.user.role === 'student' && doubt.student_id !== req.user.id) {
+    const studentProfile = get('SELECT batch_id FROM student_profiles WHERE user_id = ?', [req.user.id]);
+    if (!studentProfile || (doubt.batch_id && studentProfile.batch_id !== doubt.batch_id)) {
+      return res.status(403).json({ success: false, error: 'You are not authorized to access this private doubt asset.' });
+    }
+  }
+
+  const downloadResult = await StorageService.getAuthorizedDownloadUrl({
+    bucket: 'beast-doubts',
+    key: doubt.image_url,
+    expiresInSeconds: 3600
+  });
+
+  res.json({
+    success: true,
+    imageUrl: downloadResult.url,
+    storageProvider: downloadResult.storageProvider
   });
 });
 

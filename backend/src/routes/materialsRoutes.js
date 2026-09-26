@@ -4,6 +4,7 @@ const { authenticateToken } = require('../middleware/auth');
 const { authorizeRoles } = require('../middleware/rbac');
 const { logAudit } = require('../middleware/audit');
 const upload = require('../middleware/upload');
+const { StorageService } = require('../services/storageService');
 
 const router = express.Router();
 
@@ -112,6 +113,57 @@ router.delete('/:id', authenticateToken, authorizeRoles('teacher', 'admin'), (re
   run('DELETE FROM study_materials WHERE id = ?', [id]);
   logAudit(req.user.id, 'DELETE_STUDY_MATERIAL', 'study_materials', id, {}, req);
   res.json({ success: true, message: 'Material deleted successfully.' });
+});
+
+// GET /api/materials/:id/download-url - Authorized private file access
+router.get('/:id/download-url', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const material = get('SELECT * FROM study_materials WHERE id = ?', [id]);
+  if (!material) {
+    return res.status(404).json({ success: false, error: 'Material not found.' });
+  }
+
+  // Authorization checks
+  if (req.user.role === 'student') {
+    // 1. Subscription validity
+    if (req.user.access_end_date && new Date(req.user.access_end_date) < new Date()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Your academic subscription has expired. Please contact administration.'
+      });
+    }
+
+    // 2. Resource tier permission
+    if (req.user.resource_permissions && req.user.resource_permissions.materials === false) {
+      return res.status(403).json({
+        success: false,
+        error: 'Study material access is not enabled for your current student tier.'
+      });
+    }
+
+    // 3. Academic scope verification (must belong to this class or batch)
+    const studentProfile = get('SELECT class_id, batch_id FROM student_profiles WHERE user_id = ?', [req.user.id]);
+    if (studentProfile) {
+      if (material.batch_id && studentProfile.batch_id && material.batch_id !== studentProfile.batch_id) {
+        return res.status(403).json({
+          success: false,
+          error: 'You do not have permission to access resources outside your assigned batch.'
+        });
+      }
+    }
+  }
+
+  const downloadResult = await StorageService.getAuthorizedDownloadUrl({
+    bucket: 'beast-resources',
+    key: material.file_url,
+    expiresInSeconds: 3600
+  });
+
+  res.json({
+    success: true,
+    downloadUrl: downloadResult.url,
+    storageProvider: downloadResult.storageProvider
+  });
 });
 
 module.exports = router;

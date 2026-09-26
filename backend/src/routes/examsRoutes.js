@@ -19,6 +19,18 @@ router.get('/', authenticateToken, (req, res) => {
   const params = [];
 
   if (user.role === 'student') {
+    if (user.access_end_date && new Date(user.access_end_date) < new Date()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Your academic subscription has expired. Please contact administration.'
+      });
+    }
+    if (user.resource_permissions && user.resource_permissions.exams === false) {
+      return res.status(403).json({
+        success: false,
+        error: 'Test series and examination access is not enabled for your student tier.'
+      });
+    }
     sql += ` AND (e.batch_id IS NULL OR e.batch_id = (SELECT batch_id FROM student_profiles WHERE user_id = ?))`;
     params.push(user.id);
   }

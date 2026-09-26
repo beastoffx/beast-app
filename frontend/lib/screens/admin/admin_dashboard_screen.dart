@@ -8,6 +8,8 @@ import 'admin_batches_screen.dart';
 import 'admin_timetable_screen.dart';
 import 'admin_fees_screen.dart';
 import 'admin_audit_screen.dart';
+import 'admin_management_screen.dart';
+import 'student_management_screen.dart';
 import '../common/notices_screen.dart';
 import '../common/profile_screen.dart';
 
@@ -203,6 +205,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 childAspectRatio: 1.1,
                 children: [
                   _buildAdminTile(
+                    icon: Icons.shield,
+                    label: 'Admin Management',
+                    color: Colors.deepPurple,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminManagementScreen())),
+                  ),
+                  _buildAdminTile(
+                    icon: Icons.school,
+                    label: 'Student Lifecycle',
+                    color: Colors.teal,
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StudentManagementScreen())),
+                  ),
+                  _buildAdminTile(
                     icon: Icons.hub_outlined,
                     label: 'Batches & Classes',
                     color: Colors.indigo,
@@ -229,7 +243,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   _buildAdminTile(
                     icon: Icons.security_outlined,
                     label: 'Audit Trail',
-                    color: Colors.deepPurple,
+                    color: Colors.redAccent,
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminAuditScreen())),
                   ),
                   _buildAdminTile(

@@ -9,10 +9,53 @@ function seedDatabase() {
   console.log('[SEED] Initializing schema...');
   initSchema();
 
-  // Check if admin already exists
+  // Check if database is already initialized
+  const existingSuper = get('SELECT id FROM users WHERE email = ?', ['beastiankankinara2026@gmail.com']);
   const existingAdmin = get('SELECT id FROM users WHERE email = ?', ['admin@beastacademy.edu']);
-  if (existingAdmin) {
-    console.log('[SEED] Database already seeded. Skipping.');
+
+  if (existingAdmin || existingSuper) {
+    // 1. Ensure canonical Super Admin exists and holds super_admin role
+    if (!existingSuper) {
+      const superAdminId = 'user-super-admin-01';
+      run(
+        `INSERT OR IGNORE INTO users (id, email, password_hash, role, name, phone, status, is_active)
+         VALUES (?, 'beastiankankinara2026@gmail.com', ?, 'super_admin', 'Super Admin', '+91 98765 00000', 'active', 1)`,
+        [superAdminId, hashPassword('SuperAdmin@123')]
+      );
+      run(
+        `INSERT OR IGNORE INTO admin_profiles (id, user_id, admin_id_number, designation, permissions_json)
+         VALUES ('admin-prof-super-01', ?, 'ADM-2026-00000', 'System Super Administrator', '{"super_admin": true, "all": true}')`,
+        [superAdminId]
+      );
+    } else {
+      run("UPDATE users SET role = 'super_admin', status = 'active', is_active = 1 WHERE id = ?", [existingSuper.id]);
+      run("UPDATE admin_profiles SET permissions_json = '{\"super_admin\": true, \"all\": true}' WHERE user_id = ?", [existingSuper.id]);
+    }
+
+    // 2. Normalize old admin@beastacademy.edu to ordinary admin (explicitly remove super_admin privileges)
+    if (existingAdmin) {
+      run("UPDATE users SET role = 'admin' WHERE id = ?", [existingAdmin.id]);
+      run("UPDATE admin_profiles SET permissions_json = '{\"students\": true, \"academics\": true, \"teachers\": true}' WHERE user_id = ?", [existingAdmin.id]);
+    }
+
+    // 3. Ensure student 3 exists for pre-provisioned activation tests
+    const existingStudent3 = get('SELECT id FROM student_profiles WHERE student_id_number = ?', ['BST-2027-00003']);
+    if (!existingStudent3) {
+      const student3Id = 'user-student-03';
+      run(
+        `INSERT OR IGNORE INTO users (id, email, password_hash, role, name, phone, phone_verified, status, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, 0, 'pending_activation', 1)`,
+        [student3Id, 'rohan.verma@beastacademy.edu', hashPassword('Student@123'), 'student', 'Rohan Verma', null]
+      );
+      run(
+        `INSERT OR IGNORE INTO student_profiles (id, user_id, student_id_number, class_id, batch_id, academic_session_id, subscription_status, resource_permissions_json)
+         VALUES (?, ?, ?, 'class-12-sci', 'batch-pcm-2027-a', 'session-2026-2027', 'paid', '{"materials": true, "doubts": true, "exams": true}')`,
+        ['stu-prof-03', student3Id, 'BST-2027-00003']
+      );
+      run(`INSERT OR IGNORE INTO enrollments (id, student_id, batch_id, academic_session_id, status) VALUES (?, ?, ?, ?, ?)`,
+        ['enr-03', student3Id, 'batch-pcm-2027-a', 'session-2026-2027', 'active']);
+    }
+    console.log('[SEED] Database already seeded. Canonical Super Admin verified.');
     return;
   }
 
@@ -62,23 +105,37 @@ function seedDatabase() {
   run(`INSERT INTO subjects (id, name, code, class_id, description) VALUES (?, ?, ?, ?, ?)`,
     [subBioId, 'Biology', 'BIO-12', class12Id, 'Genetics, Ecology, Physiology & Biotechnology']);
 
-  // 5. Users: Admin, Teachers, Students
+  // 5. Users: Super Admin, Admin, Teachers, Students
+  const superAdminEmail = 'beastiankankinara2026@gmail.com';
+  const superAdminId = 'user-super-admin-01';
   const adminId = 'user-admin-01';
   const teacherPhyId = 'user-teacher-phy';
   const teacherChmId = 'user-teacher-chm';
   const student1Id = 'user-student-01';
   const student2Id = 'user-student-02';
 
-  // Super Admin
+  // 1. Canonical Super Admin (Only Super Admin in B.E.A.S.T ACADEMY)
   run(
-    `INSERT INTO users (id, email, password_hash, role, name, phone)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [adminId, 'admin@beastacademy.edu', hashPassword('Admin@123'), 'admin', 'Dr. Vikram Malhotra', '+91 98765 00001']
+    `INSERT INTO users (id, email, password_hash, role, name, phone, status, is_active)
+     VALUES (?, ?, ?, 'super_admin', 'Super Admin', '+91 98765 00000', 'active', 1)`,
+    [superAdminId, superAdminEmail, hashPassword('SuperAdmin@123')]
   );
   run(
-    `INSERT INTO admin_profiles (id, user_id, designation, permissions_json)
-     VALUES (?, ?, ?, ?)`,
-    ['admin-prof-01', adminId, 'Director of Academics', JSON.stringify({ super_admin: true, all: true })]
+    `INSERT INTO admin_profiles (id, user_id, admin_id_number, designation, permissions_json)
+     VALUES ('admin-prof-super-01', ?, 'ADM-2026-00000', 'System Super Administrator', '{"super_admin": true, "all": true}')`,
+    [superAdminId]
+  );
+
+  // 2. Ordinary Admin (Ordinary Administrator, NOT Super Admin)
+  run(
+    `INSERT INTO users (id, email, password_hash, role, name, phone, status, is_active)
+     VALUES (?, 'admin@beastacademy.edu', ?, 'admin', 'Dr. Vikram Malhotra', '+91 98765 00001', 'active', 1)`,
+    [adminId, hashPassword('Admin@123')]
+  );
+  run(
+    `INSERT INTO admin_profiles (id, user_id, admin_id_number, designation, permissions_json)
+     VALUES ('admin-prof-01', ?, 'ADM-2027-00001', 'Director of Academics', '{"students": true, "academics": true, "teachers": true}')`,
+    [adminId]
   );
 
   // Physics Teacher
@@ -129,11 +186,26 @@ function seedDatabase() {
     ['stu-prof-02', student2Id, 'STU-2026-002', class12Id, batchPcmId, sessionId, '+91 98765 99992']
   );
 
+  // Student 3 (Pre-provisioned pending activation - Rohan Verma)
+  const student3Id = 'user-student-03';
+  run(
+    `INSERT INTO users (id, email, password_hash, role, name, phone, phone_verified, status, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, 0, 'pending_activation', 1)`,
+    [student3Id, 'rohan.verma@beastacademy.edu', hashPassword('Student@123'), 'student', 'Rohan Verma', null]
+  );
+  run(
+    `INSERT INTO student_profiles (id, user_id, student_id_number, class_id, batch_id, academic_session_id, subscription_status, resource_permissions_json)
+     VALUES (?, ?, ?, ?, ?, ?, 'paid', '{"materials": true, "doubts": true, "exams": true}')`,
+    ['stu-prof-03', student3Id, 'BST-2027-00003', class12Id, batchPcmId, sessionId]
+  );
+
   // 6. Enrollments
   run(`INSERT INTO enrollments (id, student_id, batch_id, academic_session_id, status) VALUES (?, ?, ?, ?, ?)`,
     ['enr-01', student1Id, batchPcmId, sessionId, 'active']);
   run(`INSERT INTO enrollments (id, student_id, batch_id, academic_session_id, status) VALUES (?, ?, ?, ?, ?)`,
     ['enr-02', student2Id, batchPcmId, sessionId, 'active']);
+  run(`INSERT INTO enrollments (id, student_id, batch_id, academic_session_id, status) VALUES (?, ?, ?, ?, ?)`,
+    ['enr-03', student3Id, batchPcmId, sessionId, 'active']);
 
   // 7. Teacher Assignments
   run(`INSERT INTO teacher_assignments (id, teacher_id, batch_id, subject_id, academic_session_id) VALUES (?, ?, ?, ?, ?)`,
@@ -443,8 +515,9 @@ function seedDatabase() {
 
   console.log('[SEED] Successfully seeded B.E.A.S.T ACADEMY database!');
   console.log('----------------------------------------------------');
-  console.log('Default Credentials:');
-  console.log('Super Admin: admin@beastacademy.edu / Admin@123');
+  console.log('Initial Provisioned Test Accounts:');
+  console.log('Super Admin: beastiankankinara2026@gmail.com / SuperAdmin@123');
+  console.log('Admin:       admin@beastacademy.edu / Admin@123');
   console.log('Teacher:     physics.teacher@beastacademy.edu / Teacher@123');
   console.log('Student:     student1@beastacademy.edu / Student@123');
   console.log('----------------------------------------------------');

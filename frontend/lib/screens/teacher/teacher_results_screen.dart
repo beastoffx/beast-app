@@ -13,7 +13,7 @@ class TeacherResultsScreen extends StatefulWidget {
 class _TeacherResultsScreenState extends State<TeacherResultsScreen> {
   final ApiService _api = ApiService();
   bool _loading = true;
-  String _selectedExamSubjectId = 'exam-sub-phy-01';
+  final String _selectedExamSubjectId = 'exam-sub-phy-01';
   Map<String, dynamic>? _subjectInfo;
   List<dynamic> _students = [];
   Map<String, TextEditingController> _marksControllers = {};

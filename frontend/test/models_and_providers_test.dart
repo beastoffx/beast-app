@@ -137,5 +137,103 @@ void main() {
       expect(feePending.isPaid, false);
       expect(feePending.isPending, true);
     });
+
+    test('Super Admin role hierarchy and AdminUserModel lifecycle flags', () {
+      // 1. Super Admin role resolution
+      final superUser = UserModel(
+        id: 'usr-super-01',
+        email: 'beastiankankinara2026@gmail.com',
+        role: 'super_admin',
+        name: 'Super Admin',
+      );
+      expect(superUser.isAdmin, true);
+      expect(superUser.isSuperAdmin, true);
+
+      // 2. Ordinary Admin without super_admin privileges
+      final subAdmin = UserModel(
+        id: 'usr-admin-01',
+        email: 'admin@beastacademy.edu',
+        role: 'admin',
+        name: 'Academic Administrator',
+      );
+      expect(subAdmin.isAdmin, true);
+      expect(subAdmin.isSuperAdmin, false);
+
+      // 3. AdminUserModel serialization and permissions
+      final adminModel = AdminUserModel.fromJson({
+        'id': 'usr-admin-02',
+        'name': 'Rajesh Sharma',
+        'email': 'rajesh.admin@beastacademy.edu',
+        'role': 'admin',
+        'status': 'active',
+        'is_active': 1,
+        'admin_id_number': 'ADM-2027-00002',
+        'designation': 'Academic Operations Manager',
+        'department': 'Academic Operations',
+        'permissions_json': {
+          'manage_students': true,
+          'view_analytics': true,
+          'super_admin': false,
+        },
+      });
+
+      expect(adminModel.adminIdNumber, 'ADM-2027-00002');
+      expect(adminModel.isStatusActive, true);
+      expect(adminModel.isSuspended, false);
+      expect(adminModel.isArchived, false);
+      expect(adminModel.isSuperAdmin, false);
+      expect(adminModel.permissions['manage_students'], true);
+
+      // 4. StudentProfileModel subscription lifecycle
+      final studentProfile = StudentProfileModel.fromJson({
+        'id': 'stu-01',
+        'user_id': 'usr-stu-01',
+        'student_id_number': 'BST-2027-00001',
+        'subscription_status': 'paid',
+        'access_start_date': '2026-01-01',
+        'access_end_date': '2027-12-31',
+        'resource_permissions': {
+          'materials': true,
+          'exams': true,
+          'live_lectures': true,
+        },
+      });
+
+      expect(studentProfile.isPaid, true);
+      expect(studentProfile.isFree, false);
+      expect(studentProfile.isExpired, false);
+      expect(studentProfile.resourcePermissions['exams'], true);
+    });
+
+    test('Student Activation and Google Sign-In UserModel attributes', () {
+      final activatedStudent = UserModel(
+        id: 'usr-activated-01',
+        email: 'kabir@beastacademy.edu',
+        role: 'student',
+        name: 'Kabir Singhania',
+        phone: '+91 98765 44444',
+        googleUid: 'google-uid-kabir-01',
+        phoneVerified: true,
+        status: 'active',
+      );
+
+      expect(activatedStudent.isStudent, true);
+      expect(activatedStudent.googleUid, 'google-uid-kabir-01');
+      expect(activatedStudent.phoneVerified, true);
+      expect(activatedStudent.status, 'active');
+      expect(activatedStudent.isActive, true);
+      expect(activatedStudent.isPendingActivation, false);
+
+      final json = activatedStudent.toJson();
+      expect(json['google_uid'], 'google-uid-kabir-01');
+      expect(json['phone_verified'], true);
+      expect(json['status'], 'active');
+
+      final restored = UserModel.fromJson(json);
+      expect(restored.name, 'Kabir Singhania');
+      expect(restored.googleUid, 'google-uid-kabir-01');
+      expect(restored.phoneVerified, true);
+      expect(restored.isActive, true);
+    });
   });
 }

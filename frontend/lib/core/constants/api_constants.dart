@@ -1,17 +1,37 @@
 import 'package:flutter/foundation.dart';
 
 class ApiConstants {
-  // Use 10.0.2.2 for Android emulator, localhost for Web and desktop
+  static const String _envBaseUrl = String.fromEnvironment('API_BASE_URL');
+
+  // Default production HTTPS URL for release builds (can be overridden via --dart-define=API_BASE_URL=https://...)
+  static const String _defaultProductionUrl = 'https://api.beastacademy.edu';
+
   static String get baseUrl {
+    // 1. Explicit override via --dart-define=API_BASE_URL=...
+    if (_envBaseUrl.isNotEmpty) {
+      return _envBaseUrl;
+    }
+
+    // 2. Release builds for Web and Mobile across the Internet use HTTPS production backend
+    if (kReleaseMode) {
+      return _defaultProductionUrl;
+    }
+
+    // 3. Local development mode
     if (kIsWeb) {
       return 'http://localhost:5000';
     }
-    // For Android default emulator loopback
+
+    // 4. Android emulator development loopback (or adb reverse tcp:5000 tcp:5000 for local USB test)
     return 'http://10.0.2.2:5000';
   }
 
   // Endpoints
   static const String login = '/api/auth/login';
+  static const String authGoogle = '/api/auth/google';
+  static const String activateStudent = '/api/auth/activate/student';
+  static const String sendOtp = '/api/auth/activate/send-otp';
+  static const String verifyOtp = '/api/auth/activate/verify';
   static const String me = '/api/auth/me';
   static const String changePassword = '/api/auth/change-password';
   static const String recoverRequest = '/api/auth/recover-request';
@@ -57,4 +77,5 @@ class ApiConstants {
   static const String academicsStudents = '/api/academics/students';
   static const String academicsTeachers = '/api/academics/teachers';
   static const String academicsTeacherAssignments = '/api/academics/teacher-assignments';
+  static const String admins = '/api/admins';
 }

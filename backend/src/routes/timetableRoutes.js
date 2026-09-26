@@ -13,6 +13,18 @@ router.get('/my', authenticateToken, (req, res) => {
   let params = [];
 
   if (user.role === 'student') {
+    if (user.access_end_date && new Date(user.access_end_date) < new Date()) {
+      return res.status(403).json({
+        success: false,
+        error: 'Your academic subscription has expired. Please contact administration.'
+      });
+    }
+    if (user.resource_permissions && (user.resource_permissions.live_lectures === false || user.resource_permissions.lectures === false)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Live lectures access is not enabled for your student tier.'
+      });
+    }
     // Student sees timetable for the batch they are enrolled in
     sql = `
       SELECT t.*, s.name as subject_name, s.code as subject_code,

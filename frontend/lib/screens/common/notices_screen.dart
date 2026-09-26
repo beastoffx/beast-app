@@ -5,7 +5,6 @@ import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../providers/admin_provider.dart';
 import '../../widgets/app_card.dart';
-import '../../models/material_notice_model.dart';
 
 class NoticesScreen extends StatefulWidget {
   const NoticesScreen({super.key});

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/student_provider.dart';
-import '../../providers/auth_provider.dart';
 import '../../widgets/app_card.dart';
 import '../../models/doubt_model.dart';
 
@@ -339,29 +338,14 @@ class DoubtDiscussionSheet extends StatefulWidget {
 }
 
 class _DoubtDiscussionSheetState extends State<DoubtDiscussionSheet> {
-  bool _loading = true;
-  Map<String, dynamic>? _doubtData;
-  List<dynamic> _responses = [];
-  final _replyController = TextEditingController();
-
   @override
   void initState() {
     super.initState();
-    _fetchDetail();
-  }
-
-  Future<void> _fetchDetail() async {
-    final student = Provider.of<StudentProvider>(context, listen: false);
-    final res = await student.createDoubt(
-      subjectId: 'noop', title: '', note: ''
-    ); // Just to verify; let's call API directly
-    // Using ApiService
-    final api = student.isLoading; // placeholder
-    // We can fetch via student provider
-    final response = await Provider.of<StudentProvider>(context, listen: false)
-        .fetchDoubts();
-    // Fetch doubt thread
-    setState(() => _loading = false);
+    Future.microtask(() {
+      if (mounted) {
+        Provider.of<StudentProvider>(context, listen: false).fetchDoubts();
+      }
+    });
   }
 
   @override

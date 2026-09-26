@@ -6,19 +6,25 @@ PRAGMA foreign_keys = ON;
 -- 1. Users
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
+    google_uid TEXT UNIQUE,
     email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('student', 'teacher', 'admin', 'parent', 'staff')),
+    password_hash TEXT, -- Nullable for Google OAuth users, hashed for password users
+    role TEXT NOT NULL CHECK (role IN ('student', 'teacher', 'admin', 'super_admin', 'parent', 'staff')),
     name TEXT NOT NULL,
     phone TEXT,
+    phone_verified INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pending_activation', 'suspended', 'archived', 'expired')),
     avatar_url TEXT,
     is_active INTEGER NOT NULL DEFAULT 1,
+    last_login_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE INDEX IF NOT EXISTS idx_users_google_uid ON users(google_uid);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 
 -- 2. Academic Sessions
 CREATE TABLE IF NOT EXISTS academic_sessions (
@@ -70,10 +76,14 @@ CREATE INDEX IF NOT EXISTS idx_subjects_class ON subjects(class_id);
 CREATE TABLE IF NOT EXISTS student_profiles (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    student_id_number TEXT UNIQUE NOT NULL, -- e.g. "STU-2026-001"
+    student_id_number TEXT UNIQUE NOT NULL, -- e.g. "BST-2027-00001"
     class_id TEXT REFERENCES classes(id) ON DELETE SET NULL,
     batch_id TEXT REFERENCES batches(id) ON DELETE SET NULL,
     academic_session_id TEXT REFERENCES academic_sessions(id) ON DELETE SET NULL,
+    subscription_status TEXT NOT NULL DEFAULT 'paid' CHECK (subscription_status IN ('paid', 'free', 'expired', 'suspended')),
+    access_start_date TEXT,
+    access_end_date TEXT,
+    resource_permissions_json TEXT DEFAULT '{"materials": true, "doubts": true, "exams": true}',
     emergency_contact TEXT,
     enrollment_date TEXT NOT NULL DEFAULT (datetime('now')),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -82,6 +92,8 @@ CREATE TABLE IF NOT EXISTS student_profiles (
 
 CREATE INDEX IF NOT EXISTS idx_student_profiles_user ON student_profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_student_profiles_batch ON student_profiles(batch_id);
+CREATE INDEX IF NOT EXISTS idx_student_profiles_id_num ON student_profiles(student_id_number);
+CREATE INDEX IF NOT EXISTS idx_student_profiles_subscription ON student_profiles(subscription_status);
 
 -- 7. Teacher Profiles
 CREATE TABLE IF NOT EXISTS teacher_profiles (
@@ -102,11 +114,15 @@ CREATE INDEX IF NOT EXISTS idx_teacher_profiles_user ON teacher_profiles(user_id
 CREATE TABLE IF NOT EXISTS admin_profiles (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    admin_id_number TEXT UNIQUE, -- e.g. "ADM-2027-00001"
     designation TEXT NOT NULL DEFAULT 'Administrator',
     permissions_json TEXT DEFAULT '{"all": true}',
+    created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_admin_profiles_admin_id ON admin_profiles(admin_id_number);
 
 -- 9. Enrollments (Student - Batch - Session)
 CREATE TABLE IF NOT EXISTS enrollments (
@@ -386,3 +402,20 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
+
+-- 25. Phone Verifications (OTP Lifecycle)
+CREATE TABLE IF NOT EXISTS phone_verifications (
+    id TEXT PRIMARY KEY,
+    phone TEXT NOT NULL,
+    otp_hash TEXT NOT NULL,
+    session_id TEXT UNIQUE NOT NULL,
+    student_id_number TEXT NOT NULL,
+    google_uid TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    is_verified INTEGER NOT NULL DEFAULT 0,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_phone_verifications_session ON phone_verifications(session_id);
+CREATE INDEX IF NOT EXISTS idx_phone_verifications_phone ON phone_verifications(phone);

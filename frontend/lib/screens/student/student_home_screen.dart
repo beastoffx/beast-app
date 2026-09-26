@@ -52,7 +52,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     final todayClasses = student.todayClasses;
     final pendingAssignments = data?['pendingAssignments'] as List? ?? [];
     final recentNotices = data?['recentNotices'] as List? ?? [];
-    final upcomingExams = data?['upcomingExams'] as List? ?? [];
 
     return RefreshIndicator(
       onRefresh: () => student.fetchDashboard(),

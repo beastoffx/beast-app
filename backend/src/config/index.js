@@ -8,6 +8,7 @@ const config = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   dbPath: process.env.DB_PATH || path.join(__dirname, '..', '..', 'data', 'beast_academy.db'),
   uploadDir: process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads'),
+  corsOrigins: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',').map(s => s.trim()) : [],
   maxFileSize: 25 * 1024 * 1024, // 25 MB
   allowedMimeTypes: [
     'application/pdf',
@@ -19,7 +20,20 @@ const config = {
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'text/plain'
-  ]
+  ],
+  // Database configuration
+  databaseUrl: process.env.DATABASE_URL || null,
+  // Supabase Cloud Configuration
+  supabaseUrl: process.env.SUPABASE_URL || null,
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || null,
+  supabaseResourcesBucket: process.env.SUPABASE_RESOURCES_BUCKET || 'beast-resources',
+  supabaseDoubtsBucket: process.env.SUPABASE_DOUBTS_BUCKET || 'beast-doubts',
+  // Google OAuth Configuration
+  googleClientIdWeb: process.env.GOOGLE_CLIENT_ID_WEB || null,
+  googleClientIdAndroid: process.env.GOOGLE_CLIENT_ID_ANDROID || 'com.beastacademy.beast_academy',
+  // OTP Provider Configuration
+  otpProvider: process.env.OTP_PROVIDER || 'console',
+  otpTtlMinutes: parseInt(process.env.OTP_TTL_MINUTES || '10', 10)
 };
 
 module.exports = config;
