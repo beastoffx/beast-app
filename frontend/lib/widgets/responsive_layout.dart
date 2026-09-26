@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../core/theme/app_theme.dart';
+import '../core/theme/beast_tokens.dart';
+import 'beast_logo.dart';
 
 class NavDestinationItem {
   final IconData icon;
@@ -21,6 +22,7 @@ class ResponsiveScaffold extends StatelessWidget {
   final Widget body;
   final Widget? floatingActionButton;
   final List<Widget>? actions;
+  final Widget? drawer;
   final bool isOffline;
 
   const ResponsiveScaffold({
@@ -32,59 +34,77 @@ class ResponsiveScaffold extends StatelessWidget {
     required this.body,
     this.floatingActionButton,
     this.actions,
+    this.drawer,
     this.isOffline = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth >= 768;
+    final isDesktop = screenWidth >= 800;
 
     return Scaffold(
+      backgroundColor: BeastColors.scaffoldBackground,
+      drawer: drawer,
       appBar: AppBar(
+        backgroundColor: BeastColors.white,
+        foregroundColor: BeastColors.textPrimary,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        titleSpacing: 16,
         title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Text(
-                'B.E.A.S.T',
-                style: TextStyle(
-                  color: AppColors.secondary,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 13,
-                  letterSpacing: 1.2,
-                ),
-              ),
+            const BeastLogo(
+              size: 32,
+              borderRadius: BeastRadius.xs,
             ),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+            const SizedBox(width: BeastSpacing.md),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'B.E.A.S.T ACADEMY',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.6,
+                    color: BeastColors.dark900,
+                    height: 1.1,
+                  ),
+                ),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: BeastColors.textSecondary,
+                    height: 1.2,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
         actions: actions,
         bottom: isOffline
             ? PreferredSize(
-                preferredSize: const Size.fromHeight(28),
+                preferredSize: const Size.fromHeight(26),
                 child: Container(
                   width: double.infinity,
-                  color: AppColors.warningLight,
-                  padding: EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
+                  color: BeastColors.warningLight,
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.cloud_off, size: 14, color: AppColors.warning),
+                      Icon(Icons.cloud_off_rounded, size: 14, color: BeastColors.warning),
                       SizedBox(width: 6),
                       Text(
-                        'Offline Mode: Displaying cached academy records',
+                        'Offline Cache Active — Reconnecting to live cloud...',
                         style: TextStyle(
-                          color: AppColors.warning,
-                          fontSize: 12,
+                          color: BeastColors.warning,
+                          fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -101,26 +121,29 @@ class ResponsiveScaffold extends StatelessWidget {
                   selectedIndex: selectedIndex,
                   onDestinationSelected: onDestinationSelected,
                   labelType: NavigationRailLabelType.all,
-                  backgroundColor: AppColors.surface,
-                  selectedIconTheme: const IconThemeData(color: AppColors.primary),
+                  backgroundColor: BeastColors.white,
+                  selectedIconTheme: const IconThemeData(color: BeastColors.dark900),
+                  unselectedIconTheme: const IconThemeData(color: BeastColors.textMuted),
+                  indicatorColor: BeastColors.peach200,
                   selectedLabelTextStyle: const TextStyle(
-                    color: AppColors.primary,
+                    color: BeastColors.dark900,
                     fontWeight: FontWeight.w700,
-                    fontSize: 12,
+                    fontSize: 11,
                   ),
                   unselectedLabelTextStyle: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
+                    color: BeastColors.textSecondary,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 11,
                   ),
                   destinations: destinations
                       .map((d) => NavigationRailDestination(
-                            icon: Icon(d.icon),
-                            selectedIcon: Icon(d.selectedIcon),
+                            icon: Icon(d.icon, size: 20),
+                            selectedIcon: Icon(d.selectedIcon, size: 20),
                             label: Text(d.label),
                           ))
                       .toList(),
                 ),
-                const VerticalDivider(width: 1, thickness: 1, color: AppColors.border),
+                const VerticalDivider(width: 1, thickness: 1, color: BeastColors.borderSubtle),
                 Expanded(child: body),
               ],
             )
@@ -130,13 +153,14 @@ class ResponsiveScaffold extends StatelessWidget {
           : NavigationBar(
               selectedIndex: selectedIndex,
               onDestinationSelected: onDestinationSelected,
-              backgroundColor: AppColors.surface,
-              indicatorColor: AppColors.primary.withOpacity(0.08),
-              elevation: 2,
+              backgroundColor: BeastColors.white,
+              indicatorColor: BeastColors.peach200,
+              elevation: 3,
+              height: 64,
               destinations: destinations
                   .map((d) => NavigationDestination(
-                        icon: Icon(d.icon, color: AppColors.textSecondary),
-                        selectedIcon: Icon(d.selectedIcon, color: AppColors.primary),
+                        icon: Icon(d.icon, size: 22, color: BeastColors.textMuted),
+                        selectedIcon: Icon(d.selectedIcon, size: 22, color: BeastColors.dark900),
                         label: d.label,
                       ))
                   .toList(),

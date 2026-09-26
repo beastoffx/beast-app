@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme/app_theme.dart';
-import '../../providers/teacher_provider.dart';
-import '../../widgets/app_card.dart';
+import '../../core/theme/beast_tokens.dart';
 import '../../models/doubt_model.dart';
+import '../../providers/teacher_provider.dart';
+import '../../widgets/beast_components.dart';
 
 class TeacherDoubtsScreen extends StatefulWidget {
   const TeacherDoubtsScreen({super.key});
@@ -13,6 +13,8 @@ class TeacherDoubtsScreen extends StatefulWidget {
 }
 
 class _TeacherDoubtsScreenState extends State<TeacherDoubtsScreen> {
+  String _filter = 'pending'; // 'pending' | 'resolved' | 'all'
+
   @override
   void initState() {
     super.initState();
@@ -23,91 +25,97 @@ class _TeacherDoubtsScreenState extends State<TeacherDoubtsScreen> {
 
   void _showReplyDialog(DoubtModel doubt) {
     final replyController = TextEditingController();
+    bool isSubmitting = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: BeastColors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(BeastRadius.lg)),
       ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 24,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    'Faculty Response: ${doubt.title}',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                    overflow: TextOverflow.ellipsis,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            left: BeastSpacing.xl,
+            right: BeastSpacing.xl,
+            top: BeastSpacing.xxl,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + BeastSpacing.xl,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text('Respond to Question', style: BeastTypography.title),
                   ),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Student: ${doubt.studentName} • ${doubt.subjectName ?? "Subject"}',
+                style: BeastTypography.caption,
+              ),
+              const SizedBox(height: BeastSpacing.md),
+              Container(
+                padding: const EdgeInsets.all(BeastSpacing.md),
+                decoration: BoxDecoration(
+                  color: BeastColors.neutral100,
+                  borderRadius: BorderRadius.circular(BeastRadius.sm),
                 ),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Student: ${doubt.studentName} • ${doubt.subjectName}',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceElevated,
-                borderRadius: BorderRadius.circular(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(doubt.title, style: BeastTypography.bodyMedium),
+                    const SizedBox(height: 4),
+                    Text(doubt.note, style: BeastTypography.caption),
+                  ],
+                ),
               ),
-              child: Text(
-                doubt.note,
-                style: const TextStyle(fontSize: 13, height: 1.4),
+              const SizedBox(height: BeastSpacing.lg),
+              TextField(
+                controller: replyController,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Faculty Explanation & Working',
+                  hintText: 'Clarify the concept, reference formula derivations, or explain steps...',
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: replyController,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: 'Academic Solution & Explanation',
-                hintText: 'Explain the principle, reference the textbook page, or clarify the concept...',
-              ),
-            ),
-            const SizedBox(height: 18),
-            ElevatedButton.icon(
-              onPressed: () async {
-                final message = replyController.text.trim();
-                if (message.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please write an explanation before submitting.')),
-                  );
-                  return;
-                }
+              const SizedBox(height: BeastSpacing.xl),
+              BeastPrimaryButton(
+                label: 'Send Clarification',
+                icon: Icons.send_rounded,
+                isLoading: isSubmitting,
+                onPressed: () async {
+                  final message = replyController.text.trim();
+                  if (message.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please write an explanation.')),
+                    );
+                    return;
+                  }
 
-                final teacher = Provider.of<TeacherProvider>(context, listen: false);
-                final ok = await teacher.respondToDoubt(doubt.id, message);
+                  setSheetState(() => isSubmitting = true);
+                  final teacher = Provider.of<TeacherProvider>(context, listen: false);
+                  final ok = await teacher.respondToDoubt(doubt.id, message);
 
-                if (mounted) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(ok ? 'Response sent to student!' : 'Failed to send response.'),
-                      backgroundColor: ok ? AppColors.success : AppColors.error,
-                    ),
-                  );
-                }
-              },
-              icon: const Icon(Icons.send_rounded, size: 18),
-              label: const Text('Send Response to Student'),
-            ),
-          ],
+                  if (mounted) {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(ok ? 'Response sent to student successfully.' : 'Failed to send response.'),
+                        backgroundColor: ok ? BeastColors.success : BeastColors.danger,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -117,90 +125,119 @@ class _TeacherDoubtsScreenState extends State<TeacherDoubtsScreen> {
   Widget build(BuildContext context) {
     final teacher = Provider.of<TeacherProvider>(context);
 
+    final list = teacher.assignedDoubts.where((d) {
+      if (_filter == 'pending') return d.status.toUpperCase() != 'RESOLVED';
+      if (_filter == 'resolved') return d.status.toUpperCase() == 'RESOLVED';
+      return true;
+    }).toList();
+
     return Scaffold(
+      backgroundColor: BeastColors.scaffoldBackground,
       appBar: AppBar(
-        title: const Text('Student Doubts Queue'),
+        title: const Text('Faculty Doubt Inbox'),
       ),
-      body: teacher.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : teacher.assignedDoubts.isEmpty
-              ? EmptyStateView(
-                  icon: Icons.question_answer_outlined,
-                  title: 'No pending student doubts',
-                  description: 'All doubts in your assigned subjects and batches have been reviewed and answered.',
+      body: teacher.isLoading && teacher.assignedDoubts.isEmpty
+          ? const BeastLoadingState(message: 'Loading assigned student doubts...')
+          : teacher.errorMessage != null && teacher.assignedDoubts.isEmpty
+              ? BeastErrorState(
+                  message: teacher.errorMessage!,
+                  onRetry: () => teacher.fetchAssignedDoubts(),
                 )
-              : RefreshIndicator(
-                  onRefresh: () => teacher.fetchAssignedDoubts(),
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: teacher.assignedDoubts.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (ctx, i) {
-                      final d = teacher.assignedDoubts[i];
-                      return AppCard(
-                        onTap: () => _showReplyDialog(d),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surfaceElevated,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    '${d.subjectName} • Batch ${d.batchName ?? "PCM"}',
-                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
-                                  ),
-                                ),
-                                if (d.isResolved)
-                                  StatusBadge.resolved()
-                                else if (d.isAnswered)
-                                  const StatusBadge(label: 'Answered', backgroundColor: AppColors.successLight, textColor: AppColors.success)
-                                else
-                                  StatusBadge.open(),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              d.title,
-                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                            ),
-                            if (d.topic != null && d.topic!.isNotEmpty) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                'Topic: ${d.topic}',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+              : Column(
+                  children: [
+                    Container(
+                      color: BeastColors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: BeastSpacing.lg, vertical: BeastSpacing.sm),
+                      child: Row(
+                        children: [
+                          ChoiceChip(
+                            label: const Text('Unanswered'),
+                            selected: _filter == 'pending',
+                            selectedColor: BeastColors.peach200,
+                            backgroundColor: BeastColors.neutral100,
+                            onSelected: (_) => setState(() => _filter = 'pending'),
+                          ),
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            label: const Text('Resolved'),
+                            selected: _filter == 'resolved',
+                            selectedColor: BeastColors.peach200,
+                            backgroundColor: BeastColors.neutral100,
+                            onSelected: (_) => setState(() => _filter = 'resolved'),
+                          ),
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            label: const Text('All Questions'),
+                            selected: _filter == 'all',
+                            selectedColor: BeastColors.peach200,
+                            backgroundColor: BeastColors.neutral100,
+                            onSelected: (_) => setState(() => _filter = 'all'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(color: BeastColors.borderSubtle, height: 1),
+                    Expanded(
+                      child: list.isEmpty
+                          ? BeastEmptyState(
+                              icon: Icons.question_answer_outlined,
+                              title: _filter == 'pending' ? 'No Pending Doubts' : 'No Questions Found',
+                              message: _filter == 'pending'
+                                  ? 'All assigned student questions have been addressed.'
+                                  : 'Student queries matching the selected filter will appear here.',
+                            )
+                          : RefreshIndicator(
+                              onRefresh: () => teacher.fetchAssignedDoubts(),
+                              color: BeastColors.brandPrimary,
+                              child: ListView.separated(
+                                padding: const EdgeInsets.all(BeastSpacing.lg),
+                                itemCount: list.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: BeastSpacing.md),
+                                itemBuilder: (ctx, i) {
+                                  final d = list[i];
+                                  final isResolved = d.status.toUpperCase() == 'RESOLVED';
+
+                                  return BeastCard(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              '${d.studentName} • ${d.subjectName ?? "General"}',
+                                              style: BeastTypography.caption.copyWith(fontWeight: FontWeight.w700),
+                                            ),
+                                            BeastStatusBadge(status: d.status),
+                                          ],
+                                        ),
+                                        const SizedBox(height: BeastSpacing.sm),
+                                        Text(d.title, style: BeastTypography.title),
+                                        const SizedBox(height: 4),
+                                        Text(d.note, style: BeastTypography.body.copyWith(color: BeastColors.textSecondary)),
+                                        const SizedBox(height: BeastSpacing.md),
+                                        if (!isResolved)
+                                          Align(
+                                            alignment: Alignment.centerRight,
+                                            child: ElevatedButton.icon(
+                                              icon: const Icon(Icons.reply_rounded, size: 16),
+                                              label: const Text('Compose Answer'),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: BeastColors.brandPrimary,
+                                                foregroundColor: BeastColors.white,
+                                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                              ),
+                                              onPressed: () => _showReplyDialog(d),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  );
+                                },
                               ),
-                            ],
-                            const SizedBox(height: 6),
-                            Text(
-                              d.note,
-                              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('Student: ${d.studentName ?? "Student"}', style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
-                                ElevatedButton.icon(
-                                  onPressed: () => _showReplyDialog(d),
-                                  icon: const Icon(Icons.reply, size: 14),
-                                  label: const Text('Reply', style: TextStyle(fontSize: 12)),
-                                  style: ElevatedButton.styleFrom(minimumSize: const Size(80, 32), padding: const EdgeInsets.symmetric(horizontal: 10)),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                    ),
+                  ],
                 ),
     );
   }

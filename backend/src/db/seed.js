@@ -20,7 +20,7 @@ function seedDatabase() {
       run(
         `INSERT OR IGNORE INTO users (id, email, password_hash, role, name, phone, status, is_active)
          VALUES (?, 'beastiankankinara2026@gmail.com', ?, 'super_admin', 'Super Admin', '+91 98765 00000', 'active', 1)`,
-        [superAdminId, hashPassword('SuperAdmin@123')]
+        [superAdminId, hashPassword('Jeet@2026')]
       );
       run(
         `INSERT OR IGNORE INTO admin_profiles (id, user_id, admin_id_number, designation, permissions_json)
@@ -28,7 +28,7 @@ function seedDatabase() {
         [superAdminId]
       );
     } else {
-      run("UPDATE users SET role = 'super_admin', status = 'active', is_active = 1 WHERE id = ?", [existingSuper.id]);
+      run("UPDATE users SET password_hash = ?, role = 'super_admin', status = 'active', is_active = 1 WHERE id = ?", [hashPassword('Jeet@2026'), existingSuper.id]);
       run("UPDATE admin_profiles SET permissions_json = '{\"super_admin\": true, \"all\": true}' WHERE user_id = ?", [existingSuper.id]);
     }
 
@@ -118,7 +118,7 @@ function seedDatabase() {
   run(
     `INSERT INTO users (id, email, password_hash, role, name, phone, status, is_active)
      VALUES (?, ?, ?, 'super_admin', 'Super Admin', '+91 98765 00000', 'active', 1)`,
-    [superAdminId, superAdminEmail, hashPassword('SuperAdmin@123')]
+    [superAdminId, superAdminEmail, hashPassword('Jeet@2026')]
   );
   run(
     `INSERT INTO admin_profiles (id, user_id, admin_id_number, designation, permissions_json)
@@ -516,7 +516,7 @@ function seedDatabase() {
   console.log('[SEED] Successfully seeded B.E.A.S.T ACADEMY database!');
   console.log('----------------------------------------------------');
   console.log('Initial Provisioned Test Accounts:');
-  console.log('Super Admin: beastiankankinara2026@gmail.com / SuperAdmin@123');
+  console.log('Super Admin: beastiankankinara2026@gmail.com / Jeet@2026');
   console.log('Admin:       admin@beastacademy.edu / Admin@123');
   console.log('Teacher:     physics.teacher@beastacademy.edu / Teacher@123');
   console.log('Student:     student1@beastacademy.edu / Student@123');

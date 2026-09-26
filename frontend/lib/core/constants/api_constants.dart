@@ -101,4 +101,6 @@ class ApiConstants {
   static const String academicsTeachers = '/api/academics/teachers';
   static const String academicsTeacherAssignments = '/api/academics/teacher-assignments';
   static const String admins = '/api/admins';
+  static const String requests = '/api/requests';
+  static const String requestsStatus = '/api/requests/status';
 }

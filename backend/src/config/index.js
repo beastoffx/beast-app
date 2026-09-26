@@ -38,7 +38,8 @@ const config = {
   smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
   smtpUser: process.env.SMTP_USER || 'beastiankankinara2026@gmail.com',
   smtpPassword: process.env.SMTP_PASSWORD || null,
-  emailFrom: process.env.EMAIL_FROM || 'B.E.A.S.T. Academy <beastiankankinara2026@gmail.com>'
+  emailFrom: process.env.EMAIL_FROM || 'B.E.A.S.T. Academy <beastiankankinara2026@gmail.com>',
+  canonicalSuperAdminEmail: process.env.SUPER_ADMIN_EMAIL || 'beastiankankinara2026@gmail.com'
 };
 
 module.exports = config;

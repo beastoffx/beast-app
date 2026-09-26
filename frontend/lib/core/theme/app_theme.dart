@@ -1,35 +1,39 @@
 import 'package:flutter/material.dart';
+import 'beast_tokens.dart';
 
+/// AppColors acts as a semantic bridge mapping to the official BeastColors token system.
 class AppColors {
-  // Brand Academic Palette
-  static const Color primary = Color(0xFF0B192C);       // Deep Navy
-  static const Color primaryLight = Color(0xFF1E3E62);  // Rich Slate Navy
-  static const Color secondary = Color(0xFFD97706);     // Warm Amber / Gold
-  static const Color secondaryLight = Color(0xFFF59E0B);// Radiant Amber
-  static const Color accent = Color(0xFF2563EB);        // Royal Academic Blue
+  // Brand Structural Palette
+  static const Color primary = BeastColors.brandPrimary;           // #242321 Dark Structural
+  static const Color primaryLight = BeastColors.dark700;          // #34312F
+  static const Color secondary = BeastColors.peach400;            // #FEC5BB Peach Accent
+  static const Color secondaryLight = BeastColors.peach300;       // #FCD5CE
+  static const Color accent = BeastColors.accentWarm;             // #FEC89A Warm Accent
 
-  // Neutral & Surfaces (Light)
-  static const Color background = Color(0xFFF8FAFC);   // Off-white / Cool Grey 50
-  static const Color surface = Color(0xFFFFFFFF);      // Pure White
-  static const Color surfaceElevated = Color(0xFFF1F5F9);
-  static const Color border = Color(0xFFE2E8F0);       // Slate 200
-  static const Color divider = Color(0xFFCBD5E1);      // Slate 300
+  // Surfaces & Backgrounds
+  static const Color background = BeastColors.scaffoldBackground; // #FAF8F5 Warm organic off-white
+  static const Color surface = BeastColors.white;                 // #FFFFFF Pure White
+  static const Color surfaceElevated = BeastColors.white;
+  static const Color surfaceMuted = BeastColors.neutral100;       // #ECE4DB
+  static const Color surfaceWarm = BeastColors.warm100;           // #FFE5D9
+  static const Color border = BeastColors.borderSubtle;           // #EBE6DF
+  static const Color divider = BeastColors.divider;
 
-  // Typography Colors
-  static const Color textPrimary = Color(0xFF0F172A);   // Slate 900
-  static const Color textSecondary = Color(0xFF475569); // Slate 600
-  static const Color textMuted = Color(0xFF94A3B8);     // Slate 400
-  static const Color textOnPrimary = Color(0xFFFFFFFF);
+  // Typography
+  static const Color textPrimary = BeastColors.textPrimary;       // #242321
+  static const Color textSecondary = BeastColors.textSecondary;   // #514A46
+  static const Color textMuted = BeastColors.textMuted;           // #7A736E
+  static const Color textOnPrimary = BeastColors.textOnDark;      // #FFFFFF
 
   // Status Indicators
-  static const Color success = Color(0xFF10B981);       // Emerald Green
-  static const Color successLight = Color(0xFFECFDF5);
-  static const Color warning = Color(0xFFF59E0B);       // Amber
-  static const Color warningLight = Color(0xFFFFFBEB);
-  static const Color error = Color(0xFFEF4444);         // Crimson
-  static const Color errorLight = Color(0xFFFEF2F2);
-  static const Color info = Color(0xFF0284C7);          // Sky Blue
-  static const Color infoLight = Color(0xFFF0F9FF);
+  static const Color success = BeastColors.success;               // #2D6A4F
+  static const Color successLight = BeastColors.successLight;
+  static const Color warning = BeastColors.warning;               // #D97706
+  static const Color warningLight = BeastColors.warningLight;
+  static const Color error = BeastColors.danger;                  // #C92A2A
+  static const Color errorLight = BeastColors.dangerLight;
+  static const Color info = BeastColors.info;                     // #1D4ED8
+  static const Color infoLight = BeastColors.infoLight;
 }
 
 class AppTheme {
@@ -37,64 +41,64 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      primaryColor: AppColors.primary,
-      scaffoldBackgroundColor: AppColors.background,
+      primaryColor: BeastColors.brandPrimary,
+      scaffoldBackgroundColor: BeastColors.scaffoldBackground,
       colorScheme: const ColorScheme.light(
-        primary: AppColors.primary,
-        onPrimary: AppColors.textOnPrimary,
-        secondary: AppColors.secondary,
-        onSecondary: Colors.white,
-        surface: AppColors.surface,
-        onSurface: AppColors.textPrimary,
-        error: AppColors.error,
-        onError: Colors.white,
+        primary: BeastColors.brandPrimary,
+        onPrimary: BeastColors.textOnDark,
+        secondary: BeastColors.peach400,
+        onSecondary: BeastColors.dark900,
+        surface: BeastColors.white,
+        onSurface: BeastColors.textPrimary,
+        error: BeastColors.danger,
+        onError: BeastColors.white,
       ),
       fontFamily: 'Roboto',
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: BeastColors.white,
+        foregroundColor: BeastColors.textPrimary,
         elevation: 0,
         centerTitle: false,
         scrolledUnderElevation: 1,
         titleTextStyle: TextStyle(
-          color: AppColors.textPrimary,
+          color: BeastColors.textPrimary,
           fontSize: 18,
           fontWeight: FontWeight.w700,
-          letterSpacing: -0.2,
+          letterSpacing: -0.3,
         ),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.surface,
+        color: BeastColors.white,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: AppColors.border, width: 1),
+          borderRadius: BorderRadius.circular(BeastRadius.md),
+          side: const BorderSide(color: BeastColors.borderSubtle, width: 1),
         ),
         margin: EdgeInsets.zero,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.textOnPrimary,
+          backgroundColor: BeastColors.brandPrimary,
+          foregroundColor: BeastColors.textOnDark,
           elevation: 0,
           minimumSize: const Size.fromHeight(48),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(BeastRadius.sm),
           ),
           textStyle: const TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            letterSpacing: 0.2,
+            letterSpacing: 0.1,
           ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
-          side: const BorderSide(color: AppColors.border, width: 1.5),
+          foregroundColor: BeastColors.textPrimary,
+          side: const BorderSide(color: BeastColors.borderStrong, width: 1.2),
           minimumSize: const Size.fromHeight(48),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(BeastRadius.sm),
           ),
           textStyle: const TextStyle(
             fontSize: 15,
@@ -104,29 +108,29 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.surface,
+        fillColor: BeastColors.white,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.border, width: 1),
+          borderRadius: BorderRadius.circular(BeastRadius.sm),
+          borderSide: const BorderSide(color: BeastColors.borderSubtle, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.border, width: 1),
+          borderRadius: BorderRadius.circular(BeastRadius.sm),
+          borderSide: const BorderSide(color: BeastColors.borderSubtle, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.primaryLight, width: 1.8),
+          borderRadius: BorderRadius.circular(BeastRadius.sm),
+          borderSide: const BorderSide(color: BeastColors.focus, width: 1.8),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.error, width: 1),
+          borderRadius: BorderRadius.circular(BeastRadius.sm),
+          borderSide: const BorderSide(color: BeastColors.danger, width: 1),
         ),
-        labelStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
-        hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14),
+        labelStyle: const TextStyle(color: BeastColors.textSecondary, fontSize: 14),
+        hintStyle: const TextStyle(color: BeastColors.textMuted, fontSize: 14),
       ),
       dividerTheme: const DividerThemeData(
-        color: AppColors.border,
+        color: BeastColors.divider,
         thickness: 1,
         space: 1,
       ),

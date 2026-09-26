@@ -192,7 +192,7 @@ class EmailService {
     await run(
       `INSERT INTO email_verifications 
        (id, email, otp_hash, session_id, student_id_number, google_uid, expires_at, is_verified, attempts)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, false, 0)`,
       [id, trustedEmail, otpHash, sessionId, studentIdNumber, googleUid, expiresAt]
     );
 

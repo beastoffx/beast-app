@@ -436,3 +436,45 @@ CREATE TABLE IF NOT EXISTS email_verifications (
 
 CREATE INDEX IF NOT EXISTS idx_email_verifications_session ON email_verifications(session_id);
 CREATE INDEX IF NOT EXISTS idx_email_verifications_email ON email_verifications(email);
+
+-- 27. Account Onboarding Requests (Multi-tier Approval Lifecycle)
+CREATE TABLE IF NOT EXISTS account_requests (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    name TEXT NOT NULL,
+    phone TEXT,
+    google_uid TEXT,
+    requested_role TEXT NOT NULL CHECK (requested_role IN ('student', 'teacher', 'admin')),
+    status TEXT NOT NULL CHECK (status IN (
+        'PENDING_TEACHER_REVIEW',
+        'PENDING_ADMIN_REVIEW',
+        'PENDING_SUPER_ADMIN_REVIEW',
+        'APPROVED',
+        'REJECTED'
+    )),
+    target_class_id TEXT REFERENCES classes(id) ON DELETE SET NULL,
+    target_batch_id TEXT REFERENCES batches(id) ON DELETE SET NULL,
+    target_session_id TEXT REFERENCES academic_sessions(id) ON DELETE SET NULL,
+    qualification TEXT,
+    department TEXT,
+    notes TEXT,
+    teacher_reviewer_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    teacher_reviewed_at TEXT,
+    teacher_review_notes TEXT,
+    admin_reviewer_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    admin_reviewed_at TEXT,
+    admin_review_notes TEXT,
+    super_admin_reviewer_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    super_admin_reviewed_at TEXT,
+    super_admin_review_notes TEXT,
+    rejection_reason TEXT,
+    generated_student_id TEXT,
+    created_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_requests_email ON account_requests(email);
+CREATE INDEX IF NOT EXISTS idx_account_requests_google_uid ON account_requests(google_uid);
+CREATE INDEX IF NOT EXISTS idx_account_requests_status ON account_requests(status);
+CREATE INDEX IF NOT EXISTS idx_account_requests_role ON account_requests(requested_role);

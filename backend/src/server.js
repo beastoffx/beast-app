@@ -25,6 +25,7 @@ const notificationsRoutes = require('./routes/notificationsRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const auditRoutes = require('./routes/auditRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const requestRoutes = require('./routes/requestRoutes');
 
 function createApp() {
   const app = express();
@@ -132,6 +133,7 @@ function createApp() {
   app.use('/api/search', searchRoutes);
   app.use('/api/audit-logs', auditRoutes);
   app.use('/api/ai', aiRoutes);
+  app.use('/api/requests', requestRoutes);
 
   // 404 & Global Error Handling
   app.use(notFoundHandler);

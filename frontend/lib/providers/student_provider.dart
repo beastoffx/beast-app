@@ -38,6 +38,7 @@ class StudentProvider with ChangeNotifier {
   double get overallAttendance => _overallAttendance;
   List<SubjectAttendance> get subjectAttendance => _subjectAttendance;
   List<AttendanceRecord> get recentAttendance => _recentAttendance;
+  List<AttendanceRecord> get attendanceRecords => _recentAttendance;
 
   // Assignments
   List<AssignmentModel> _assignments = [];
@@ -62,6 +63,7 @@ class StudentProvider with ChangeNotifier {
   List<DoubtModel> _openDoubts = [];
   List<DoubtModel> _resolvedDoubts = [];
   List<DoubtModel> get allDoubts => _allDoubts;
+  List<DoubtModel> get doubts => _allDoubts;
   List<DoubtModel> get openDoubts => _openDoubts;
   List<DoubtModel> get resolvedDoubts => _resolvedDoubts;
 
@@ -265,6 +267,23 @@ class StudentProvider with ChangeNotifier {
     }
     return false;
   }
+
+  // Ask Doubt (alias for createDoubt with questionText)
+  Future<bool> askDoubt({
+    required String subjectId,
+    required String title,
+    required String questionText,
+    String? topic,
+    String? imageUrl,
+    String priority = 'normal',
+  }) => createDoubt(
+    subjectId: subjectId,
+    title: title,
+    topic: topic,
+    note: questionText,
+    imageUrl: imageUrl,
+    priority: priority,
+  );
 
   // Resolve Doubt
   Future<bool> resolveDoubt(String doubtId, bool isResolved) async {

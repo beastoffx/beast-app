@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/beast_tokens.dart';
 import '../../providers/admin_provider.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/beast_components.dart';
 
 class StudentManagementScreen extends StatefulWidget {
   const StudentManagementScreen({super.key});
@@ -199,16 +201,16 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSelected ? AppColors.primary : Colors.grey.shade300),
+          color: isSelected ? BeastColors.peach200 : BeastColors.neutral100,
+          borderRadius: BorderRadius.circular(BeastRadius.xs),
+          border: Border.all(color: isSelected ? BeastColors.peach400 : BeastColors.borderSubtle),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? Colors.white : Colors.black87,
+            color: isSelected ? BeastColors.dark900 : BeastColors.textSecondary,
           ),
         ),
       ),
@@ -225,83 +227,44 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
     final batchName = s['batch_name'] ?? 'Batch';
     final userId = s['id'] ?? '';
 
-    Color statusColor = Colors.green;
-    String statusText = 'ACTIVE';
-    if (status == 'pending_activation') {
-      statusColor = Colors.blue;
-      statusText = 'PENDING';
-    } else if (status == 'suspended') {
-      statusColor = Colors.orange;
-      statusText = 'SUSPENDED';
-    } else if (status == 'archived') {
-      statusColor = Colors.grey;
-      statusText = 'ARCHIVED';
-    }
-
-    Color subColor = Colors.teal;
-    String subText = 'PAID';
-    if (subscription == 'free') {
-      subColor = Colors.blueGrey;
-      subText = 'FREE';
-    } else if (subscription == 'expired') {
-      subColor = Colors.red;
-      subText = 'EXPIRED';
-    }
-
-    return AppCard(
+    return BeastCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: AppColors.primary.withOpacity(0.1),
-                child: const Icon(Icons.person, color: AppColors.primary),
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: BeastColors.peach200,
+                  borderRadius: BorderRadius.circular(BeastRadius.sm),
+                ),
+                child: Center(
+                  child: Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : 'S',
+                    style: const TextStyle(fontWeight: FontWeight.w800, color: BeastColors.dark900, fontSize: 16),
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                    Text(name, style: BeastTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 2),
-                    Text(email, style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+                    Text(email, style: BeastTypography.caption),
                     const SizedBox(height: 4),
                     Text(
                       'ID: $studentId  •  $className ($batchName)',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                      style: BeastTypography.caption.copyWith(fontWeight: FontWeight.w600, color: BeastColors.textSecondary),
                     ),
                   ],
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  // Status Badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: statusColor),
-                    ),
-                    child: Text(statusText, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor)),
-                  ),
-                  const SizedBox(height: 4),
-                  // Subscription Badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: subColor.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: subColor),
-                    ),
-                    child: Text(subText, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: subColor)),
-                  ),
-                ],
-              ),
+              BeastStatusBadge(status: status.toString().toUpperCase()),
             ],
           ),
           const SizedBox(height: 10),
@@ -913,7 +876,7 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
                   name: nameCtrl.text.trim(),
                   email: emailCtrl.text.trim(),
                   password: passCtrl.text.trim(),
-                  studentIdNumber: idCtrl.text.trim().isEmpty ? 'BST-2027-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}' : idCtrl.text.trim(),
+                  studentIdNumber: idCtrl.text.trim(),
                   classId: selectedClassId,
                   batchId: selectedBatchId,
                   sessionId: selectedSessionId,

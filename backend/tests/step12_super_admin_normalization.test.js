@@ -44,7 +44,7 @@ test.before(async () => {
   // Login Super Admin
   const superRes = await api('/api/auth/login', {
     method: 'POST',
-    body: { email: CANONICAL_SUPER_ADMIN_EMAIL, password: 'SuperAdmin@123' }
+    body: { email: CANONICAL_SUPER_ADMIN_EMAIL, password: 'Jeet@2026' }
   });
   superAdminToken = superRes.data.token;
 
@@ -316,7 +316,7 @@ test('BEAST Academy — Section 10: Super Admin Normalization & Security Suite',
     // New login attempt is rejected
     const loginRes = await api('/api/auth/login', {
       method: 'POST',
-      body: { email: CANONICAL_SUPER_ADMIN_EMAIL, password: 'SuperAdmin@123' }
+      body: { email: CANONICAL_SUPER_ADMIN_EMAIL, password: 'Jeet@2026' }
     });
     assert.equal(loginRes.status, 403);
 

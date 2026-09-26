@@ -208,30 +208,30 @@ void main() {
     test('Student Activation and Google Sign-In UserModel attributes', () {
       final activatedStudent = UserModel(
         id: 'usr-activated-01',
-        email: 'kabir@beastacademy.edu',
+        email: 'aarav.mehta@beastacademy.edu',
         role: 'student',
-        name: 'Kabir Singhania',
+        name: 'Aarav Mehta',
         phone: '+91 98765 44444',
-        googleUid: 'google-uid-kabir-01',
+        googleUid: 'google-uid-aarav-01',
         phoneVerified: true,
         status: 'active',
       );
 
       expect(activatedStudent.isStudent, true);
-      expect(activatedStudent.googleUid, 'google-uid-kabir-01');
+      expect(activatedStudent.googleUid, 'google-uid-aarav-01');
       expect(activatedStudent.phoneVerified, true);
       expect(activatedStudent.status, 'active');
       expect(activatedStudent.isActive, true);
       expect(activatedStudent.isPendingActivation, false);
 
       final json = activatedStudent.toJson();
-      expect(json['google_uid'], 'google-uid-kabir-01');
+      expect(json['google_uid'], 'google-uid-aarav-01');
       expect(json['phone_verified'], true);
       expect(json['status'], 'active');
 
       final restored = UserModel.fromJson(json);
-      expect(restored.name, 'Kabir Singhania');
-      expect(restored.googleUid, 'google-uid-kabir-01');
+      expect(restored.name, 'Aarav Mehta');
+      expect(restored.googleUid, 'google-uid-aarav-01');
       expect(restored.phoneVerified, true);
       expect(restored.isActive, true);
     });

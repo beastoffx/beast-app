@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme/app_theme.dart';
-import '../../providers/student_provider.dart';
-import '../../widgets/app_card.dart';
+import '../../core/theme/beast_tokens.dart';
 import '../../models/doubt_model.dart';
+import '../../providers/student_provider.dart';
+import '../../widgets/beast_components.dart';
 
 class StudentDoubtsScreen extends StatefulWidget {
   const StudentDoubtsScreen({super.key});
@@ -14,6 +14,7 @@ class StudentDoubtsScreen extends StatefulWidget {
 
 class _StudentDoubtsScreenState extends State<StudentDoubtsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  DoubtModel? _selectedDoubt;
 
   @override
   void initState() {
@@ -32,25 +33,25 @@ class _StudentDoubtsScreenState extends State<StudentDoubtsScreen> with SingleTi
 
   void _showCreateDoubtDialog() {
     final titleController = TextEditingController();
-    final topicController = TextEditingController();
     final noteController = TextEditingController();
     final imageUrlController = TextEditingController();
     String selectedSubjectId = 'sub-phy-12';
-    String priority = 'normal';
+    bool isSubmitting = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: BeastColors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(BeastRadius.lg)),
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => Padding(
           padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 24,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            left: BeastSpacing.xl,
+            right: BeastSpacing.xl,
+            top: BeastSpacing.xxl,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + BeastSpacing.xl,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -59,123 +60,98 @@ class _StudentDoubtsScreenState extends State<StudentDoubtsScreen> with SingleTi
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.help_outline, color: AppColors.secondary, size: 22),
-                      SizedBox(width: 8),
-                      Text(
-                        'Capture Academic Doubt',
-                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-                      ),
-                    ],
-                  ),
+                  Text('Submit Academic Doubt', style: BeastTypography.title),
                   IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.pop(ctx),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              // Subject Dropdown
+              const SizedBox(height: BeastSpacing.md),
               DropdownButtonFormField<String>(
                 value: selectedSubjectId,
-                decoration: const InputDecoration(labelText: 'Enrolled Subject'),
+                decoration: const InputDecoration(labelText: 'Subject'),
                 items: const [
-                  DropdownMenuItem(value: 'sub-phy-12', child: Text('Physics (PHY-12)')),
-                  DropdownMenuItem(value: 'sub-chm-12', child: Text('Chemistry (CHM-12)')),
-                  DropdownMenuItem(value: 'sub-mth-12', child: Text('Mathematics (MTH-12)')),
-                  DropdownMenuItem(value: 'sub-bio-12', child: Text('Biology (BIO-12)')),
+                  DropdownMenuItem(value: 'sub-phy-12', child: Text('Physics')),
+                  DropdownMenuItem(value: 'sub-chm-12', child: Text('Chemistry')),
+                  DropdownMenuItem(value: 'sub-mth-12', child: Text('Mathematics')),
+                  DropdownMenuItem(value: 'sub-bio-12', child: Text('Biology')),
                 ],
                 onChanged: (val) {
                   if (val != null) setModalState(() => selectedSubjectId = val);
                 },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: BeastSpacing.md),
               TextField(
                 controller: titleController,
                 decoration: const InputDecoration(
-                  labelText: 'Doubt Headline / Question Title',
-                  hintText: 'e.g. Work done by static friction during rolling',
+                  labelText: 'Question Title / Topic',
+                  hintText: 'e.g. Work-energy theorem in non-inertial frame',
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: topicController,
-                decoration: const InputDecoration(
-                  labelText: 'Chapter / Specific Topic (Optional)',
-                  hintText: 'e.g. Rotational Dynamics Chapter 7',
-                ),
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: BeastSpacing.md),
               TextField(
                 controller: noteController,
                 maxLines: 3,
                 decoration: const InputDecoration(
-                  labelText: 'Detailed Academic Question',
-                  hintText: 'Specify exactly what step or theorem is confusing you...',
+                  labelText: 'Detailed Explanation of Doubt',
+                  hintText: 'Describe where you are stuck, steps attempted, or concept doubt...',
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: BeastSpacing.md),
               TextField(
                 controller: imageUrlController,
                 decoration: const InputDecoration(
-                  labelText: 'Question Photo / Diagram Link (Optional)',
-                  hintText: '/uploads/doubts/question_diagram.png',
-                  prefixIcon: Icon(Icons.camera_alt_outlined),
+                  labelText: 'Optional Diagram / Image Attachment URL',
+                  hintText: 'https://...',
+                  prefixIcon: Icon(Icons.image_outlined),
                 ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Text('Priority:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                  const SizedBox(width: 12),
-                  ChoiceChip(
-                    label: const Text('Normal'),
-                    selected: priority == 'normal',
-                    onSelected: (_) => setModalState(() => priority = 'normal'),
-                  ),
-                  const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: const Text('Urgent'),
-                    selected: priority == 'high',
-                    selectedColor: AppColors.errorLight,
-                    onSelected: (_) => setModalState(() => priority = 'high'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
+              const SizedBox(height: BeastSpacing.xl),
+              BeastPrimaryButton(
+                label: 'Send Question to Faculty',
+                icon: Icons.send_rounded,
+                isLoading: isSubmitting,
                 onPressed: () async {
                   final title = titleController.text.trim();
-                  final note = noteController.text.trim();
-                  if (title.isEmpty || note.isEmpty) {
+                  final text = noteController.text.trim();
+                  final img = imageUrlController.text.trim();
+
+                  if (title.isEmpty || text.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please provide a title and detailed question.')),
+                      const SnackBar(content: Text('Please enter both title and description.')),
                     );
                     return;
                   }
 
+                  setModalState(() => isSubmitting = true);
                   final provider = Provider.of<StudentProvider>(context, listen: false);
-                  final ok = await provider.createDoubt(
+                  final ok = await provider.askDoubt(
                     subjectId: selectedSubjectId,
                     title: title,
-                    topic: topicController.text.trim(),
-                    note: note,
-                    imageUrl: imageUrlController.text.trim().isNotEmpty ? imageUrlController.text.trim() : null,
-                    priority: priority,
+                    questionText: text,
+                    imageUrl: img.isNotEmpty ? img : null,
                   );
 
                   if (mounted) {
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(ok ? 'Doubt shared with your faculty!' : 'Failed to submit doubt.'),
-                        backgroundColor: ok ? AppColors.success : AppColors.error,
-                      ),
-                    );
+                    if (ok) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Doubt submitted to faculty successfully.'),
+                          backgroundColor: BeastColors.success,
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(provider.errorMessage ?? 'Submission failed.'),
+                          backgroundColor: BeastColors.danger,
+                        ),
+                      );
+                    }
                   }
                 },
-                child: const Text('Save & Transmit to Faculty'),
               ),
             ],
           ),
@@ -184,250 +160,271 @@ class _StudentDoubtsScreenState extends State<StudentDoubtsScreen> with SingleTi
     );
   }
 
-  void _showDoubtDetailSheet(DoubtModel doubt) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => DoubtDiscussionSheet(doubtId: doubt.id),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final student = Provider.of<StudentProvider>(context);
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+
+    final openDoubts = student.doubts.where((d) => d.status.toUpperCase() != 'RESOLVED').toList();
+    final resolvedDoubts = student.doubts.where((d) => d.status.toUpperCase() == 'RESOLVED').toList();
 
     return Scaffold(
+      backgroundColor: BeastColors.scaffoldBackground,
       appBar: AppBar(
-        title: const Text('DoubtDeck — Academic Q&A'),
+        title: const Text('Academic Doubts Desk'),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondary,
-          indicatorColor: AppColors.primary,
+          labelColor: BeastColors.dark900,
+          unselectedLabelColor: BeastColors.textSecondary,
+          indicatorColor: BeastColors.brandPrimary,
+          indicatorWeight: 2.5,
           tabs: [
-            Tab(text: 'Open Doubts (${student.openDoubts.length})'),
-            Tab(text: 'Resolved (${student.resolvedDoubts.length})'),
+            Tab(text: 'Pending Clarification (${openDoubts.length})'),
+            Tab(text: 'Resolved (${resolvedDoubts.length})'),
           ],
         ),
       ),
-      body: student.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildDoubtList(student.openDoubts, isResolvedTab: false),
-                _buildDoubtList(student.resolvedDoubts, isResolvedTab: true),
-              ],
-            ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showCreateDoubtDialog,
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.secondary,
-        icon: const Icon(Icons.add_a_photo_outlined),
-        label: const Text('Ask a Doubt', style: TextStyle(fontWeight: FontWeight.w700)),
+        backgroundColor: BeastColors.brandPrimary,
+        foregroundColor: BeastColors.white,
+        icon: const Icon(Icons.help_outline_rounded, size: 20),
+        label: const Text('Ask a Doubt'),
       ),
+      body: student.isLoading && student.doubts.isEmpty
+          ? const BeastLoadingState(message: 'Loading doubts...')
+          : student.errorMessage != null && student.doubts.isEmpty
+              ? BeastErrorState(
+                  message: student.errorMessage!,
+                  onRetry: () => student.fetchDoubts(),
+                )
+              : TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildDoubtsTab(openDoubts, isDesktop, false),
+                    _buildDoubtsTab(resolvedDoubts, isDesktop, true),
+                  ],
+                ),
     );
   }
 
-  Widget _buildDoubtList(List<DoubtModel> doubts, {required bool isResolvedTab}) {
+  Widget _buildDoubtsTab(List<DoubtModel> doubts, bool isDesktop, bool isResolved) {
     if (doubts.isEmpty) {
-      return EmptyStateView(
+      return BeastEmptyState(
         icon: Icons.question_answer_outlined,
-        title: isResolvedTab ? 'No resolved doubts yet' : 'No open doubts currently',
-        description: isResolvedTab
-            ? 'When your questions are answered and you mark them resolved, they are filed here for future revision.'
-            : 'Got stuck on a formula, derivation, or problem? Tap below to ask your faculty.',
-        actionLabel: isResolvedTab ? null : 'Ask a Doubt',
-        onAction: isResolvedTab ? null : _showCreateDoubtDialog,
+        title: isResolved ? 'No Resolved Doubts' : 'No Open Questions',
+        message: isResolved
+            ? 'Resolved academic questions will be archived here for reference.'
+            : 'You have no pending questions. Tap "Ask a Doubt" to consult faculty.',
+      );
+    }
+
+    if (isDesktop) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 5,
+            child: ListView.separated(
+              padding: const EdgeInsets.all(BeastSpacing.lg),
+              itemCount: doubts.length,
+              separatorBuilder: (_, __) => const SizedBox(height: BeastSpacing.md),
+              itemBuilder: (ctx, i) {
+                final d = doubts[i];
+                final isSel = _selectedDoubt?.id == d.id;
+                return BeastCard(
+                  borderColor: isSel ? BeastColors.brandPrimary : BeastColors.borderSubtle,
+                  backgroundColor: isSel ? BeastColors.surfaceWarm.withValues(alpha: 0.3) : BeastColors.white,
+                  onTap: () => setState(() => _selectedDoubt = d),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(d.subjectName ?? 'Subject', style: BeastTypography.caption),
+                          BeastStatusBadge(status: d.status),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(d.title, style: BeastTypography.bodyMedium),
+                      const SizedBox(height: 4),
+                      Text(
+                        d.note,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: BeastTypography.caption,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          const VerticalDivider(width: 1, color: BeastColors.borderSubtle),
+          Expanded(
+            flex: 6,
+            child: _selectedDoubt != null
+                ? _buildDoubtDetailView(_selectedDoubt!)
+                : const Center(
+                    child: Text('Select a doubt to view faculty discussion', style: TextStyle(color: BeastColors.textMuted)),
+                  ),
+          ),
+        ],
       );
     }
 
     return RefreshIndicator(
       onRefresh: () => Provider.of<StudentProvider>(context, listen: false).fetchDoubts(),
+      color: BeastColors.brandPrimary,
       child: ListView.separated(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.only(left: BeastSpacing.lg, right: BeastSpacing.lg, top: BeastSpacing.lg, bottom: 80),
         itemCount: doubts.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (ctx, i) {
-          final d = doubts[i];
-          return AppCard(
-            onTap: () => _showDoubtDetailSheet(d),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceElevated,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        d.subjectName ?? 'Subject',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
-                      ),
-                    ),
-                    if (d.isResolved)
-                      StatusBadge.resolved()
-                    else if (d.isAnswered)
-                      const StatusBadge(
-                        label: 'Faculty Replied',
-                        backgroundColor: AppColors.successLight,
-                        textColor: AppColors.success,
-                        icon: Icons.check,
-                      )
-                    else
-                      StatusBadge.open(),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  d.title,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                ),
-                if (d.topic != null && d.topic!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    'Topic: ${d.topic}',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-                  ),
-                ],
-                const SizedBox(height: 6),
-                Text(
-                  d.note,
-                  style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '${d.responseCount} faculty replies',
-                      style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-                    ),
-                    const Row(
-                      children: [
-                        Text('Open Thread', style: TextStyle(fontSize: 12, color: AppColors.primaryLight, fontWeight: FontWeight.w700)),
-                        Icon(Icons.chevron_right, size: 16, color: AppColors.primaryLight),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          );
-        },
+        separatorBuilder: (_, __) => const SizedBox(height: BeastSpacing.md),
+        itemBuilder: (ctx, i) => _buildDoubtCard(doubts[i]),
       ),
     );
   }
-}
 
-class DoubtDiscussionSheet extends StatefulWidget {
-  final String doubtId;
-  const DoubtDiscussionSheet({super.key, required this.doubtId});
-
-  @override
-  State<DoubtDiscussionSheet> createState() => _DoubtDiscussionSheetState();
-}
-
-class _DoubtDiscussionSheetState extends State<DoubtDiscussionSheet> {
-  @override
-  void initState() {
-    super.initState();
-    Future.microtask(() {
-      if (mounted) {
-        Provider.of<StudentProvider>(context, listen: false).fetchDoubts();
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final student = Provider.of<StudentProvider>(context);
-    final doubt = student.allDoubts.firstWhere(
-      (d) => d.id == widget.doubtId,
-      orElse: () => DoubtModel(id: widget.doubtId, studentId: '', subjectId: '', title: 'Doubt Discussion', note: '', status: 'open', priority: 'normal'),
-    );
-
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
+  Widget _buildDoubtCard(DoubtModel d) {
+    return BeastCard(
       child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: BeastColors.surfaceWarm,
+                  borderRadius: BorderRadius.circular(BeastRadius.xs),
+                ),
                 child: Text(
-                  doubt.title,
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  d.subjectName ?? 'Subject',
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: BeastColors.dark900),
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(context),
-              ),
+              BeastStatusBadge(status: d.status),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Subject: ${doubt.subjectName ?? "Subject"} • Status: ${doubt.status.toUpperCase()}',
-            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceElevated,
-              borderRadius: BorderRadius.circular(8),
+          const SizedBox(height: BeastSpacing.md),
+          Text(d.title, style: BeastTypography.title),
+          const SizedBox(height: 4),
+          Text(d.note, style: BeastTypography.body.copyWith(color: BeastColors.textSecondary)),
+          if (d.responseCount > 0) ...[
+            const SizedBox(height: BeastSpacing.md),
+            const Divider(color: BeastColors.borderSubtle),
+            const SizedBox(height: BeastSpacing.sm),
+            Container(
+              padding: const EdgeInsets.all(BeastSpacing.md),
+              decoration: BoxDecoration(
+                color: BeastColors.neutral100,
+                borderRadius: BorderRadius.circular(BeastRadius.sm),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.forum_outlined, size: 16, color: BeastColors.brandPrimary),
+                  const SizedBox(width: 8),
+                  Text('${d.responseCount} Faculty Response(s)', style: BeastTypography.caption.copyWith(fontWeight: FontWeight.w700)),
+                ],
+              ),
             ),
-            child: Text(
-              doubt.note,
-              style: const TextStyle(fontSize: 13, height: 1.4),
+          ],
+          if (d.status.toUpperCase() != 'RESOLVED') ...[
+            const SizedBox(height: BeastSpacing.md),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
+                label: const Text('Mark as Resolved'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(140, 36),
+                ),
+                onPressed: () async {
+                  final provider = Provider.of<StudentProvider>(context, listen: false);
+                  await provider.resolveDoubt(d.id, true);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Doubt marked as resolved.')),
+                    );
+                  }
+                },
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDoubtDetailView(DoubtModel d) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(BeastSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    await student.resolveDoubt(doubt.id, false);
-                    if (mounted) Navigator.pop(context);
-                  },
-                  icon: const Icon(Icons.help_outline, size: 16),
-                  label: const Text('Still Unclear'),
-                ),
+              BeastBadge(
+                label: d.subjectName ?? 'Subject',
+                backgroundColor: BeastColors.surfaceWarm,
+                textColor: BeastColors.dark900,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    await student.resolveDoubt(doubt.id, true);
-                    if (mounted) Navigator.pop(context);
-                  },
-                  icon: const Icon(Icons.check_circle_outline, size: 16),
-                  label: const Text('Mark Resolved'),
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
-                ),
-              ),
+              BeastStatusBadge(status: d.status),
             ],
           ),
+          const SizedBox(height: BeastSpacing.md),
+          Text(d.title, style: BeastTypography.headline),
+          const SizedBox(height: BeastSpacing.sm),
+          Text(d.note, style: BeastTypography.body),
+          const SizedBox(height: BeastSpacing.xl),
+          const BeastSectionHeader(title: 'Faculty Responses'),
+          const Divider(color: BeastColors.borderSubtle),
+          if (d.responseCount == 0)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Text('No response yet from faculty. You will be notified once answered.', style: TextStyle(color: BeastColors.textMuted)),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: BeastCard(
+                child: Row(
+                  children: [
+                    const Icon(Icons.forum_outlined, color: BeastColors.brandPrimary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${d.responseCount} Faculty Response(s)', style: BeastTypography.bodyMedium),
+                          Text('Status: ${d.status.toUpperCase()}', style: BeastTypography.caption),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (d.status.toUpperCase() != 'RESOLVED') ...[
+            const SizedBox(height: BeastSpacing.xl),
+            BeastPrimaryButton(
+              label: 'Mark as Resolved',
+              icon: Icons.check_circle_rounded,
+              onPressed: () async {
+                final provider = Provider.of<StudentProvider>(context, listen: false);
+                await provider.resolveDoubt(d.id, true);
+                if (context.mounted) {
+                  setState(() => _selectedDoubt = null);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Doubt marked as resolved.')),
+                  );
+                }
+              },
+            ),
+          ],
         ],
       ),
     );

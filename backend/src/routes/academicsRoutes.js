@@ -357,7 +357,7 @@ router.get('/students/:id', authenticateToken, authorizeRoles('admin', 'teacher'
 
   // Summary stats for administrative insight
   const attendanceStats = await get(
-    'SELECT count(*) as total, SUM(is_present) as present FROM attendance WHERE student_id = ?',
+    "SELECT count(*) as total, SUM(CASE WHEN status IN ('present', 'late') THEN 1 ELSE 0 END) as present FROM attendance WHERE student_id = ?",
     [id]
   );
   const doubtRow = await get('SELECT count(*) as count FROM doubts WHERE student_id = ?', [id]);

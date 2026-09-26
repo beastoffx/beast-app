@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/beast_tokens.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../providers/admin_provider.dart';
-import '../../widgets/app_card.dart';
+import '../../widgets/beast_components.dart';
 
 class NoticesScreen extends StatefulWidget {
   const NoticesScreen({super.key});
@@ -52,19 +52,23 @@ class _NoticesScreenState extends State<NoticesScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Publish Institutional Notice', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                  Text('Publish Institutional Notice', style: BeastTypography.h3),
                   IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               TextField(
                 controller: titleController,
-                decoration: const InputDecoration(labelText: 'Notice Title', hintText: 'e.g. Schedule Revision for Term Mock'),
+                decoration: const InputDecoration(
+                  labelText: 'Notice Title',
+                  hintText: 'e.g. Schedule Revision for Term Mock',
+                  border: OutlineInputBorder(),
+                ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: category,
-                decoration: const InputDecoration(labelText: 'Category'),
+                decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
                 items: const [
                   DropdownMenuItem(value: 'academic', child: Text('Academic')),
                   DropdownMenuItem(value: 'exam', child: Text('Examination')),
@@ -77,27 +81,34 @@ class _NoticesScreenState extends State<NoticesScreen> {
                   if (val != null) setModalState(() => category = val);
                 },
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               TextField(
                 controller: descriptionController,
                 maxLines: 3,
-                decoration: const InputDecoration(labelText: 'Detailed Announcement'),
+                decoration: const InputDecoration(labelText: 'Detailed Announcement', border: OutlineInputBorder()),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Checkbox(
                     value: isPinned,
+                    activeColor: BeastColors.dark900,
                     onChanged: (v) => setModalState(() => isPinned = v ?? false),
                   ),
-                  const Text('Pin Notice to Top of Notice Board', style: TextStyle(fontSize: 13)),
+                  Text('Pin Notice to Top of Notice Board', style: BeastTypography.bodyMedium),
                 ],
               ),
               const SizedBox(height: 16),
               ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: BeastColors.dark900,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
                 onPressed: () async {
                   final title = titleController.text.trim();
                   final desc = descriptionController.text.trim();
+
                   if (title.isEmpty || desc.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Please fill title and description.')),
@@ -119,13 +130,13 @@ class _NoticesScreenState extends State<NoticesScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(ok ? 'Notice published successfully!' : 'Failed to publish notice.'),
-                        backgroundColor: ok ? AppColors.success : AppColors.error,
+                        backgroundColor: ok ? BeastColors.success : BeastColors.error,
                       ),
                     );
                     Provider.of<StudentProvider>(context, listen: false).fetchNotices();
                   }
                 },
-                child: const Text('Publish Announcement'),
+                child: const Text('Publish Announcement', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -145,11 +156,14 @@ class _NoticesScreenState extends State<NoticesScreen> {
     }).toList();
 
     return Scaffold(
+      backgroundColor: BeastColors.surfaceNeutral,
       appBar: AppBar(
-        title: const Text('Institutional Notice Board'),
+        title: Text('Institutional Notice Board', style: BeastTypography.h3),
+        backgroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: BeastColors.dark900),
             onPressed: () => student.fetchNotices(),
           ),
         ],
@@ -157,88 +171,85 @@ class _NoticesScreenState extends State<NoticesScreen> {
       body: Column(
         children: [
           // Category Filter Chips
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              children: [
-                _buildFilterChip('all', 'All Notices'),
-                const SizedBox(width: 8),
-                _buildFilterChip('exam', 'Examinations'),
-                const SizedBox(width: 8),
-                _buildFilterChip('academic', 'Academics'),
-                const SizedBox(width: 8),
-                _buildFilterChip('holiday', 'Holidays'),
-                const SizedBox(width: 8),
-                _buildFilterChip('urgent', 'Urgent Alerts'),
-              ],
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: BeastSpacing.lg, vertical: BeastSpacing.sm),
+            width: double.infinity,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildFilterChip('all', 'All Notices'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('exam', 'Examinations'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('academic', 'Academics'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('holiday', 'Holidays'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('urgent', 'Urgent Alerts'),
+                ],
+              ),
             ),
           ),
-          const Divider(height: 1),
+          const Divider(height: 1, color: BeastColors.borderSubtle),
 
           Expanded(
             child: student.isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BeastLoadingState(message: 'Loading institutional notices...'))
                 : filtered.isEmpty
-                    ? const EmptyStateView(
+                    ? BeastEmptyState(
                         icon: Icons.campaign_outlined,
                         title: 'No Notices in this category',
-                        description: 'Institutional announcements and faculty updates will appear here.',
+                        subtitle: 'Institutional announcements and faculty updates will appear here.',
                       )
                     : RefreshIndicator(
                         onRefresh: () => student.fetchNotices(),
                         child: ListView.separated(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(BeastSpacing.lg),
                           itemCount: filtered.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          separatorBuilder: (_, __) => const SizedBox(height: BeastSpacing.md),
                           itemBuilder: (ctx, i) {
                             final n = filtered[i];
                             final isUrgent = n.isUrgent;
 
-                            return AppCard(
-                              color: isUrgent ? AppColors.errorLight : AppColors.surface,
-                              border: isUrgent ? Border.all(color: AppColors.error.withOpacity(0.4), width: 1.5) : null,
+                            return BeastCard(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
                                     children: [
                                       if (n.isPinned) ...[
-                                        const Icon(Icons.push_pin, size: 16, color: AppColors.secondary),
+                                        const Icon(Icons.push_pin, size: 16, color: BeastColors.dark900),
                                         const SizedBox(width: 6),
                                       ],
                                       Expanded(
                                         child: Text(
                                           n.title,
-                                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                                          style: BeastTypography.bodyLarge.copyWith(fontWeight: FontWeight.w700),
                                         ),
                                       ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: isUrgent ? AppColors.error : AppColors.surfaceElevated,
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          n.category.toUpperCase(),
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: isUrgent ? Colors.white : AppColors.textSecondary,
-                                          ),
-                                        ),
+                                      BeastBadge(
+                                        label: n.category.toUpperCase(),
+                                        variant: isUrgent ? BeastBadgeVariant.warning : BeastBadgeVariant.peach,
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
                                     n.description,
-                                    style: TextStyle(fontSize: 13, color: isUrgent ? AppColors.textPrimary : AppColors.textSecondary, height: 1.4),
+                                    style: BeastTypography.bodyMedium.copyWith(color: BeastColors.textSecondary, height: 1.4),
                                   ),
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    'Published: ${n.publishDate}${n.authorName != null ? " • Author: ${n.authorName}" : ""}',
-                                    style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.schedule, size: 12, color: BeastColors.textMuted),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Published: ${n.publishDate}${n.authorName != null ? " • Author: ${n.authorName}" : ""}',
+                                        style: BeastTypography.caption.copyWith(color: BeastColors.textMuted),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -252,7 +263,7 @@ class _NoticesScreenState extends State<NoticesScreen> {
       floatingActionButton: (auth.isAdmin || auth.isTeacher)
           ? FloatingActionButton.extended(
               onPressed: _showPublishNoticeDialog,
-              backgroundColor: AppColors.primary,
+              backgroundColor: BeastColors.dark900,
               foregroundColor: Colors.white,
               icon: const Icon(Icons.post_add),
               label: const Text('Publish Notice', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -266,10 +277,11 @@ class _NoticesScreenState extends State<NoticesScreen> {
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
+      selectedColor: BeastColors.peach200,
+      backgroundColor: BeastColors.neutral100,
       onSelected: (_) => setState(() => _selectedCategory = key),
-      selectedColor: AppColors.primary,
       labelStyle: TextStyle(
-        color: isSelected ? Colors.white : AppColors.textSecondary,
+        color: isSelected ? BeastColors.dark900 : BeastColors.textSecondary,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
         fontSize: 12,
       ),

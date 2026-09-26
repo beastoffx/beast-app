@@ -57,7 +57,7 @@ test.before(async () => {
   // Login Super Admin (beastiankankinara2026@gmail.com)
   const superAdminRes = await api('/api/auth/login', {
     method: 'POST',
-    body: { email: 'beastiankankinara2026@gmail.com', password: 'SuperAdmin@123' }
+    body: { email: 'beastiankankinara2026@gmail.com', password: 'Jeet@2026' }
   });
   superAdminToken = superAdminRes.data.token;
 

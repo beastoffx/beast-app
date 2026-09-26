@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme/app_theme.dart';
-import '../../providers/student_provider.dart';
-import '../../widgets/app_card.dart';
+import '../../core/theme/beast_tokens.dart';
 import '../../models/assignment_model.dart';
+import '../../providers/student_provider.dart';
+import '../../widgets/beast_components.dart';
 
 class StudentAssignmentsScreen extends StatefulWidget {
   const StudentAssignmentsScreen({super.key});
@@ -24,97 +24,113 @@ class _StudentAssignmentsScreenState extends State<StudentAssignmentsScreen> {
   }
 
   void _showSubmissionDialog(AssignmentModel assignment) {
-    final notesController = TextEditingController(text: assignment.feedback != null ? '' : '');
+    final notesController = TextEditingController();
     final fileUrlController = TextEditingController(text: assignment.submissionFileUrl ?? '');
+    bool isSubmitting = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: BeastColors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(BeastRadius.lg)),
       ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 24,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    'Submit: ${assignment.title}',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Deadline: ${assignment.deadline} • Max Marks: ${assignment.maxMarks}',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: notesController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Submission Notes / Solution Summary',
-                hintText: 'Describe your method, steps taken, or questions...',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: fileUrlController,
-              decoration: const InputDecoration(
-                labelText: 'Solution File Attachment Link / Cloud Path',
-                hintText: '/uploads/submissions/my_solution.pdf',
-                prefixIcon: Icon(Icons.attachment),
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () async {
-                final notes = notesController.text.trim();
-                final fileUrl = fileUrlController.text.trim();
-                if (notes.isEmpty && fileUrl.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please provide submission notes or an attachment URL.')),
-                  );
-                  return;
-                }
-
-                final provider = Provider.of<StudentProvider>(context, listen: false);
-                final ok = await provider.submitAssignment(
-                  assignment.id,
-                  notes,
-                  fileUrl: fileUrl.isNotEmpty ? fileUrl : null,
-                );
-
-                if (mounted) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(ok ? 'Assignment submitted successfully!' : 'Failed to submit assignment.'),
-                      backgroundColor: ok ? AppColors.success : AppColors.error,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            left: BeastSpacing.xl,
+            right: BeastSpacing.xl,
+            top: BeastSpacing.xxl,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + BeastSpacing.xl,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Submit: ${assignment.title}',
+                      style: BeastTypography.title,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Due: ${assignment.deadline} • Max Marks: ${assignment.maxMarks}',
+                style: BeastTypography.caption,
+              ),
+              const SizedBox(height: BeastSpacing.lg),
+              TextField(
+                controller: notesController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Solution Summary / Explanatory Notes',
+                  hintText: 'Enter your working, steps taken, or key observations...',
+                ),
+              ),
+              const SizedBox(height: BeastSpacing.md),
+              TextField(
+                controller: fileUrlController,
+                decoration: const InputDecoration(
+                  labelText: 'Solution Attachment URL / File Link',
+                  hintText: 'https://... or /uploads/...',
+                  prefixIcon: Icon(Icons.attachment_rounded),
+                ),
+              ),
+              const SizedBox(height: BeastSpacing.xl),
+              BeastPrimaryButton(
+                label: 'Submit Coursework',
+                icon: Icons.send_rounded,
+                isLoading: isSubmitting,
+                onPressed: () async {
+                  final notes = notesController.text.trim();
+                  final fileUrl = fileUrlController.text.trim();
+                  if (notes.isEmpty && fileUrl.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please provide solution notes or an attachment URL.')),
+                    );
+                    return;
+                  }
+
+                  setSheetState(() => isSubmitting = true);
+                  final provider = Provider.of<StudentProvider>(context, listen: false);
+                  final ok = await provider.submitAssignment(
+                    assignment.id,
+                    notes,
+                    fileUrl: fileUrl.isNotEmpty ? fileUrl : null,
                   );
-                }
-              },
-              child: const Text('Confirm & Submit Assignment'),
-            ),
-          ],
+
+                  if (mounted) {
+                    Navigator.pop(ctx);
+                    if (ok) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Assignment submitted successfully.'),
+                          backgroundColor: BeastColors.success,
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(provider.errorMessage ?? 'Submission failed.'),
+                          backgroundColor: BeastColors.danger,
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -124,174 +140,183 @@ class _StudentAssignmentsScreenState extends State<StudentAssignmentsScreen> {
   Widget build(BuildContext context) {
     final student = Provider.of<StudentProvider>(context);
 
-    List<AssignmentModel> filtered = student.assignments;
+    List<AssignmentModel> list = student.assignments;
     if (_selectedFilter == 'pending') {
-      filtered = filtered.where((a) => !a.isSubmitted).toList();
+      list = list.where((a) => !a.isSubmitted).toList();
     } else if (_selectedFilter == 'submitted') {
-      filtered = filtered.where((a) => a.isSubmitted && !a.isReviewed).toList();
+      list = list.where((a) => a.isSubmitted && !a.isReviewed).toList();
     } else if (_selectedFilter == 'reviewed') {
-      filtered = filtered.where((a) => a.isReviewed).toList();
+      list = list.where((a) => a.isReviewed).toList();
     }
 
     return Scaffold(
+      backgroundColor: BeastColors.scaffoldBackground,
       appBar: AppBar(
-        title: const Text('My Assignments'),
+        title: const Text('Coursework & Assignments'),
       ),
-      body: Column(
-        children: [
-          // Filter Chips
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                _buildFilterChip('all', 'All (${student.assignments.length})'),
-                const SizedBox(width: 8),
-                _buildFilterChip('pending', 'Pending (${student.assignments.where((a) => !a.isSubmitted).length})'),
-                const SizedBox(width: 8),
-                _buildFilterChip('submitted', 'Submitted (${student.assignments.where((a) => a.isSubmitted && !a.isReviewed).length})'),
-                const SizedBox(width: 8),
-                _buildFilterChip('reviewed', 'Graded (${student.assignments.where((a) => a.isReviewed).length})'),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-
-          Expanded(
-            child: student.isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : filtered.isEmpty
-                    ? EmptyStateView(
-                        icon: Icons.assignment_turned_in_outlined,
-                        title: 'No Assignments in this section',
-                        description: 'When teachers post assignments for your batch, they will appear here.',
-                      )
-                    : RefreshIndicator(
-                        onRefresh: () => student.fetchAssignments(),
-                        child: ListView.separated(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: filtered.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
-                          itemBuilder: (ctx, i) {
-                            final assign = filtered[i];
-                            return AppCard(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.surfaceElevated,
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          assign.subjectName ?? 'Subject',
-                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
-                                        ),
-                                      ),
-                                      if (assign.isReviewed)
-                                        StatusBadge.reviewed()
-                                      else if (assign.isSubmitted)
-                                        StatusBadge.submitted()
-                                      else
-                                        StatusBadge.pending(),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    assign.title,
-                                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    assign.description,
-                                    style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    'Due: ${assign.deadline} • Max Marks: ${assign.maxMarks}',
-                                    style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-                                  ),
-
-                                  // Reviewed feedback & marks
-                                  if (assign.isReviewed) ...[
-                                    const SizedBox(height: 12),
-                                    Container(
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.successLight,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: AppColors.success.withOpacity(0.3)),
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              const Text(
-                                                'Teacher Review',
-                                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.success),
-                                              ),
-                                              Text(
-                                                'Marks: ${assign.marksObtained} / ${assign.maxMarks}',
-                                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.success),
-                                              ),
-                                            ],
-                                          ),
-                                          if (assign.feedback != null && assign.feedback!.isNotEmpty) ...[
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              '"${assign.feedback}"',
-                                              style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: AppColors.textPrimary),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-
-                                  // Action Button
-                                  if (!assign.isReviewed) ...[
-                                    const SizedBox(height: 12),
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: OutlinedButton.icon(
-                                        onPressed: () => _showSubmissionDialog(assign),
-                                        icon: Icon(assign.isSubmitted ? Icons.edit : Icons.upload, size: 16),
-                                        label: Text(assign.isSubmitted ? 'Resubmit Solution' : 'Submit Solution'),
-                                        style: OutlinedButton.styleFrom(
-                                          minimumSize: const Size(140, 36),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
+      body: student.isLoading && student.assignments.isEmpty
+          ? const BeastLoadingState(message: 'Loading assignments...')
+          : student.errorMessage != null && student.assignments.isEmpty
+              ? BeastErrorState(
+                  message: student.errorMessage!,
+                  onRetry: () => student.fetchAssignments(),
+                )
+              : Column(
+                  children: [
+                    _buildFilterChips(),
+                    Expanded(
+                      child: list.isEmpty
+                          ? BeastEmptyState(
+                              icon: Icons.assignment_turned_in_outlined,
+                              title: _selectedFilter == 'all'
+                                  ? 'No Assignments'
+                                  : 'No ${_selectedFilter.toUpperCase()} Assignments',
+                              message: 'Assignments posted by faculty will appear here.',
+                            )
+                          : RefreshIndicator(
+                              onRefresh: () => student.fetchAssignments(),
+                              color: BeastColors.brandPrimary,
+                              child: ListView.separated(
+                                padding: const EdgeInsets.all(BeastSpacing.lg),
+                                itemCount: list.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: BeastSpacing.md),
+                                itemBuilder: (ctx, i) => _buildAssignmentCard(list[i]),
                               ),
-                            );
-                          },
-                        ),
-                      ),
-          ),
-        ],
+                            ),
+                    ),
+                  ],
+                ),
+    );
+  }
+
+  Widget _buildFilterChips() {
+    return Container(
+      color: BeastColors.white,
+      padding: const EdgeInsets.symmetric(horizontal: BeastSpacing.lg, vertical: BeastSpacing.sm),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _chip('all', 'All Work'),
+            const SizedBox(width: 8),
+            _chip('pending', 'Pending Submission'),
+            const SizedBox(width: 8),
+            _chip('submitted', 'Awaiting Review'),
+            const SizedBox(width: 8),
+            _chip('reviewed', 'Graded'),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildFilterChip(String key, String label) {
+  Widget _chip(String key, String label) {
     final isSelected = _selectedFilter == key;
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
       onSelected: (_) => setState(() => _selectedFilter = key),
-      selectedColor: AppColors.primary,
+      selectedColor: BeastColors.peach200,
+      backgroundColor: BeastColors.neutral100,
       labelStyle: TextStyle(
-        color: isSelected ? Colors.white : AppColors.textSecondary,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
         fontSize: 12,
+        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+        color: isSelected ? BeastColors.dark900 : BeastColors.textSecondary,
+      ),
+      side: BorderSide(
+        color: isSelected ? BeastColors.peach400 : BeastColors.borderSubtle,
+      ),
+    );
+  }
+
+  Widget _buildAssignmentCard(AssignmentModel assignment) {
+    return BeastCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: BeastColors.surfaceWarm,
+                  borderRadius: BorderRadius.circular(BeastRadius.xs),
+                ),
+                child: Text(
+                  assignment.subjectName ?? 'General',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: BeastColors.dark900,
+                  ),
+                ),
+              ),
+              BeastStatusBadge(status: assignment.submissionStatus ?? 'pending'),
+            ],
+          ),
+          const SizedBox(height: BeastSpacing.md),
+          Text(assignment.title, style: BeastTypography.title),
+          const SizedBox(height: 4),
+          Text(
+            assignment.description,
+            style: BeastTypography.body.copyWith(color: BeastColors.textSecondary),
+          ),
+          const SizedBox(height: BeastSpacing.md),
+          Row(
+            children: [
+              const Icon(Icons.schedule_rounded, size: 14, color: BeastColors.textMuted),
+              const SizedBox(width: 4),
+              Text('Due: ${assignment.deadline}', style: BeastTypography.caption),
+              const SizedBox(width: 14),
+              const Icon(Icons.grade_outlined, size: 14, color: BeastColors.textMuted),
+              const SizedBox(width: 4),
+              Text('Max: ${assignment.maxMarks} marks', style: BeastTypography.caption),
+            ],
+          ),
+          if (assignment.isSubmitted && assignment.marksObtained != null) ...[
+            const SizedBox(height: BeastSpacing.md),
+            Container(
+              padding: const EdgeInsets.all(BeastSpacing.md),
+              decoration: BoxDecoration(
+                color: BeastColors.successLight,
+                borderRadius: BorderRadius.circular(BeastRadius.sm),
+                border: Border.all(color: BeastColors.success.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_outline_rounded, color: BeastColors.success, size: 20),
+                  const SizedBox(width: BeastSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Score: ${assignment.marksObtained} / ${assignment.maxMarks}',
+                          style: const TextStyle(fontWeight: FontWeight.w700, color: BeastColors.success),
+                        ),
+                        if (assignment.feedback != null && assignment.feedback!.isNotEmpty)
+                          Text('Feedback: ${assignment.feedback}', style: BeastTypography.caption),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (!assignment.isSubmitted) ...[
+            const SizedBox(height: BeastSpacing.md),
+            Align(
+              alignment: Alignment.centerRight,
+              child: BeastPrimaryButton(
+                label: 'Submit Solution',
+                icon: Icons.upload_file_rounded,
+                height: 40,
+                onPressed: () => _showSubmissionDialog(assignment),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/beast_tokens.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/app_card.dart';
+import '../../widgets/beast_components.dart';
+import '../../widgets/beast_logo.dart';
 
 class StudentActivationScreen extends StatefulWidget {
   const StudentActivationScreen({super.key});
@@ -71,7 +72,7 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(auth.errorMessage ?? 'Invalid Student ID.'),
-          backgroundColor: AppColors.error,
+          backgroundColor: BeastColors.error,
         ),
       );
     }
@@ -94,25 +95,25 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Verification code sent to your registered institute email.'),
-          backgroundColor: AppColors.success,
+          backgroundColor: BeastColors.success,
         ),
       );
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(auth.errorMessage ?? 'Failed to send verification code.'),
-          backgroundColor: AppColors.error,
+          content: Text(auth.errorMessage ?? 'Failed to send OTP.'),
+          backgroundColor: BeastColors.error,
         ),
       );
     }
   }
 
-  // Action 3: Verify Email OTP and Activate
+  // Action 3: Verify OTP & Activate Account
   Future<void> _handleVerifyAndActivate() async {
     final otp = _otpController.text.trim();
-    if (otp.length < 6) {
+    if (otp.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter the 6-digit verification code.')),
+        const SnackBar(content: Text('Please enter the full 6-digit OTP.')),
       );
       return;
     }
@@ -130,7 +131,7 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(auth.errorMessage ?? 'Verification failed. Please check the code.'),
-          backgroundColor: AppColors.error,
+          backgroundColor: BeastColors.error,
         ),
       );
     }
@@ -143,88 +144,96 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
     final googleEmail = auth.pendingGoogleEmail ?? '';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: BeastColors.surfaceNeutral,
       appBar: AppBar(
-        title: const Text('Institute Account Activation'),
+        title: Text('Institute Account Activation', style: BeastTypography.h3),
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
       ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
-            child: AppCard(
+            child: BeastCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  const Center(child: BeastLogo(size: 48)),
+                  const SizedBox(height: 16),
+
                   // Progress Header
                   _buildProgressIndicator(),
                   const SizedBox(height: 24),
 
                   // STEP 1: Google Verified Message
                   if (_currentStep == 1) ...[
-                    const CircleAvatar(
-                      radius: 32,
-                      backgroundColor: Colors.blue,
-                      child: Icon(Icons.verified_user, color: Colors.white, size: 36),
+                    Container(
+                      width: 56,
+                      height: 56,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(
+                        color: BeastColors.peach200,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.verified_user, color: BeastColors.dark900, size: 28),
                     ),
                     const SizedBox(height: 16),
                     Text(
                       'Welcome, $googleName',
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      style: BeastTypography.h2,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 6),
                     Text(
                       googleEmail,
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                      style: BeastTypography.caption,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.blue.shade200),
+                        color: BeastColors.peach100,
+                        borderRadius: BorderRadius.circular(BeastRadius.sm),
+                        border: Border.all(color: BeastColors.peach300),
                       ),
-                      child: const Text(
+                      child: Text(
                         'Your Google account is authenticated, but it is not yet linked to a B.E.A.S.T Academy institutional account.',
-                        style: TextStyle(fontSize: 13, color: Colors.black87),
+                        style: BeastTypography.bodyMedium,
                         textAlign: TextAlign.center,
                       ),
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: BeastColors.dark900,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                       icon: const Icon(Icons.school, color: Colors.white),
-                      label: const Text('Activate Institute Account', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      label: const Text('Activate Institute Account', style: TextStyle(fontWeight: FontWeight.bold)),
                       onPressed: () => setState(() => _currentStep = 2),
                     ),
                   ],
 
                   // STEP 2: Enter Student ID
                   if (_currentStep == 2) ...[
-                    const Text(
+                    Text(
                       'Enter Institute Student ID',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: BeastTypography.h3,
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       'Enter the official Student ID issued to you by B.E.A.S.T Academy administration.',
-                      style: TextStyle(fontSize: 13, color: Colors.black54),
+                      style: BeastTypography.caption,
                     ),
                     const SizedBox(height: 20),
                     TextField(
                       controller: _studentIdController,
-                      textCapitalization: TextCapitalization.characters,
                       decoration: const InputDecoration(
-                        labelText: 'Official Student ID',
+                        labelText: 'Student ID Number',
                         hintText: 'e.g. BST-2027-00001',
                         prefixIcon: Icon(Icons.badge_outlined),
                         border: OutlineInputBorder(),
@@ -233,113 +242,58 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
                     const SizedBox(height: 20),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: BeastColors.dark900,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                       onPressed: auth.isLoading ? null : _handleValidateStudentId,
                       child: auth.isLoading
                           ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Text('Verify Student ID', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          : const Text('Find Profile', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ],
 
-                  // STEP 3: Confirm Identity & Request Email Verification
+                  // STEP 3: Confirm Profile
                   if (_currentStep == 3 && _studentData != null) ...[
-                    const Text(
-                      'Confirm Identity & Email',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
+                    Text('Confirm Your Profile', style: BeastTypography.h3),
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.grey.shade300),
+                        color: BeastColors.neutral100,
+                        borderRadius: BorderRadius.circular(BeastRadius.sm),
+                        border: Border.all(color: BeastColors.borderSubtle),
                       ),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('Student Name:', style: TextStyle(fontSize: 13, color: Colors.grey)),
-                              Text(_studentData!['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('Student ID:', style: TextStyle(fontSize: 13, color: Colors.grey)),
-                              Text(_studentData!['studentIdNumber'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('Enrolled Batch:', style: TextStyle(fontSize: 13, color: Colors.grey)),
-                              Text('${_studentData!['className']} (${_studentData!['batchName']})', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                          if (_studentData!['emailMasked'] != null) ...[
-                            const SizedBox(height: 6),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Registered Email:', style: TextStyle(fontSize: 13, color: Colors.grey)),
-                                Text(_studentData!['emailMasked'], style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.mail_outline, color: Colors.blue.shade700, size: 22),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'A 6-digit verification code will be sent to ${_studentData!['emailMasked'] ?? 'your registered institute email'}.',
-                              style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
-                            ),
-                          ),
+                          Text('Name: ${_studentData!['name']}', style: BeastTypography.bodyLarge.copyWith(fontWeight: FontWeight.w700)),
+                          Text('ID: ${_studentData!['studentIdNumber']}', style: BeastTypography.caption),
+                          Text('Class: ${_studentData!['className'] ?? "N/A"}', style: BeastTypography.caption),
                         ],
                       ),
                     ),
                     const SizedBox(height: 20),
-                    ElevatedButton.icon(
+                    ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: BeastColors.dark900,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
-                      icon: const Icon(Icons.send, color: Colors.white, size: 18),
-                      label: auth.isLoading
-                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Text('Send Verification Code to Email', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                       onPressed: auth.isLoading ? null : _handleRequestOtp,
+                      child: auth.isLoading
+                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Text('Send Verification Code', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ],
 
-                  // STEP 4: Enter Email OTP
+                  // STEP 4: Enter OTP
                   if (_currentStep == 4) ...[
-                    const Text(
-                      'Enter Email Verification Code',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
+                    Text('Enter Verification Code', style: BeastTypography.h3),
                     const SizedBox(height: 6),
                     Text(
-                      'A 6-digit verification code has been sent to ${_studentData?['emailMasked'] ?? 'your registered institute email'}.',
-                      style: const TextStyle(fontSize: 13, color: Colors.black54),
+                      'Enter the 6-digit verification code sent to your registered email.',
+                      style: BeastTypography.caption,
                     ),
                     const SizedBox(height: 20),
                     TextField(
@@ -360,7 +314,7 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
                       children: [
                         Text(
                           _canResend ? 'Did not receive code?' : 'Resend in ${_resendCountdown}s',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                          style: BeastTypography.caption,
                         ),
                         TextButton(
                           onPressed: _canResend ? _handleRequestOtp : null,
@@ -371,46 +325,52 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
                     const SizedBox(height: 16),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: BeastColors.dark900,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                       onPressed: auth.isLoading ? null : _handleVerifyAndActivate,
                       child: auth.isLoading
                           ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Text('Verify & Activate Account', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          : const Text('Verify & Activate Account', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ],
 
                   // STEP 5: Account Activated Success
                   if (_currentStep == 5) ...[
-                    const CircleAvatar(
-                      radius: 36,
-                      backgroundColor: Colors.green,
-                      child: Icon(Icons.check, color: Colors.white, size: 44),
+                    Container(
+                      width: 64,
+                      height: 64,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(
+                        color: BeastColors.successLight,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.check, color: BeastColors.success, size: 36),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
+                    Text(
                       'Account Activated!',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.green),
+                      style: BeastTypography.h2.copyWith(color: BeastColors.success),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Your Google account is now securely linked to your institutional Student profile.',
-                      style: TextStyle(fontSize: 14, color: Colors.black54),
+                      style: BeastTypography.bodyMedium,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: BeastColors.dark900,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                       onPressed: () {
-                        // Return to root, AuthProvider isAuthenticated will trigger StudentDashboard
                         Navigator.of(context).popUntil((route) => route.isFirst);
                       },
-                      child: const Text('Continue to Student Dashboard', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: const Text('Continue to Student Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ],
@@ -443,9 +403,9 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
     final isDone = _currentStep > step;
     final isCurrent = _currentStep == step;
 
-    Color color = Colors.grey.shade300;
-    if (isDone) color = Colors.green;
-    if (isCurrent) color = AppColors.primary;
+    Color color = BeastColors.neutral300;
+    if (isDone) color = BeastColors.success;
+    if (isCurrent) color = BeastColors.dark900;
 
     return Column(
       children: [
@@ -462,7 +422,7 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
               : Text(
                   '$step',
                   style: TextStyle(
-                    color: isCurrent ? Colors.white : Colors.black54,
+                    color: isCurrent ? Colors.white : BeastColors.textSecondary,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                   ),
@@ -474,7 +434,7 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
           style: TextStyle(
             fontSize: 11,
             fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-            color: isCurrent ? AppColors.primary : Colors.black54,
+            color: isCurrent ? BeastColors.dark900 : BeastColors.textSecondary,
           ),
         ),
       ],
@@ -487,7 +447,7 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
       child: Container(
         height: 2,
         margin: const EdgeInsets.only(bottom: 16, left: 4, right: 4),
-        color: isDone ? Colors.green : Colors.grey.shade300,
+        color: isDone ? BeastColors.success : BeastColors.neutral200,
       ),
     );
   }

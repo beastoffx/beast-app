@@ -40,6 +40,9 @@ class AuthProvider with ChangeNotifier {
   bool get isStudent => _user?.isStudent ?? false;
   bool get isTeacher => _user?.isTeacher ?? false;
   bool get isAdmin => _user?.isAdmin ?? false;
+  bool get isSuperAdmin => _user?.isSuperAdmin ?? false;
+  String get fullName => _user?.name ?? '';
+  String get email => _user?.email ?? '';
 
   Future<void> initAuth() async {
     final prefs = await SharedPreferences.getInstance();

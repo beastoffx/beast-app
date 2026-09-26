@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/beast_tokens.dart';
 import '../../providers/student_provider.dart';
-import '../../widgets/app_card.dart';
+import '../../widgets/beast_components.dart';
 
 class StudentExamsScreen extends StatefulWidget {
   const StudentExamsScreen({super.key});
@@ -35,230 +35,203 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> with SingleTick
     final summary = student.resultsSummary;
 
     return Scaffold(
+      backgroundColor: BeastColors.scaffoldBackground,
       appBar: AppBar(
         title: const Text('Examinations & Results'),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondary,
-          indicatorColor: AppColors.primary,
+          labelColor: BeastColors.dark900,
+          unselectedLabelColor: BeastColors.textSecondary,
+          indicatorColor: BeastColors.brandPrimary,
+          indicatorWeight: 2.5,
           tabs: const [
             Tab(text: 'Academic Results'),
             Tab(text: 'Exam Schedules'),
           ],
         ),
       ),
-      body: student.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                // TAB 1: ACADEMIC RESULTS
-                RefreshIndicator(
-                  onRefresh: () => student.fetchExamsAndResults(),
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Cumulative Performance Banner
-                        if (summary != null) ...[
-                          AppCard(
-                            padding: const EdgeInsets.all(20),
-                            color: AppColors.primary,
-                            child: Column(
-                              children: [
-                                const Text(
-                                  'CUMULATIVE PERFORMANCE',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.secondary,
-                                    letterSpacing: 1.2,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '${summary['cumulativePercentage'] ?? 0}%',
-                                  style: const TextStyle(
-                                    fontSize: 40,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Overall Grade: ${summary['overallGrade'] ?? "N/A"} • Total Exams: ${summary['totalExams'] ?? 0}',
-                                  style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.85)),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                        ],
+      body: student.isLoading && student.exams.isEmpty && student.results.isEmpty
+          ? const BeastLoadingState(message: 'Loading examination records...')
+          : student.errorMessage != null && student.exams.isEmpty && student.results.isEmpty
+              ? BeastErrorState(
+                  message: student.errorMessage!,
+                  onRetry: () => student.fetchExamsAndResults(),
+                )
+              : TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildResultsTab(student, summary),
+                    _buildSchedulesTab(student),
+                  ],
+                ),
+    );
+  }
 
-                        const Text(
-                          'Subject Performance Sheet',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+  Widget _buildResultsTab(StudentProvider student, Map<String, dynamic>? summary) {
+    return RefreshIndicator(
+      onRefresh: () => student.fetchExamsAndResults(),
+      color: BeastColors.brandPrimary,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(BeastSpacing.lg),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (summary != null) ...[
+                  BeastCard(
+                    padding: const EdgeInsets.all(BeastSpacing.xl),
+                    child: Column(
+                      children: [
+                        Text(
+                          'CUMULATIVE PERFORMANCE',
+                          style: BeastTypography.label.copyWith(letterSpacing: 1.0),
                         ),
-                        const SizedBox(height: 12),
-                        if (student.results.isEmpty)
-                          EmptyStateView(
-                            icon: Icons.fact_check_outlined,
-                            title: 'No examination results published yet',
-                            description: 'When teachers evaluate and publish test papers, your authentic verified scores will appear here.',
-                          )
-                        else
-                          ...student.results.map((res) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: AppCard(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.surfaceElevated,
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            res.subjectName ?? 'Subject',
-                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary),
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.successLight,
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          child: Text(
-                                            'Grade ${res.grade ?? "A"}',
-                                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: AppColors.success),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      res.examTitle ?? 'Assessment',
-                                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Date: ${res.examDate ?? "Completed"}',
-                                      style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'Score: ${res.marksObtained.toStringAsFixed(1)} / ${res.maxMarks.toStringAsFixed(0)}',
-                                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                                        ),
-                                        Text(
-                                          '${res.percentage}%',
-                                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.primary),
-                                        ),
-                                      ],
-                                    ),
-                                    if (res.feedback != null && res.feedback!.isNotEmpty) ...[
-                                      const SizedBox(height: 8),
-                                      Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.surfaceElevated,
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          'Faculty Remarks: "${res.feedback}"',
-                                          style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: AppColors.textSecondary),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
+                        const SizedBox(height: BeastSpacing.md),
+                        Text(
+                          '${summary['cumulativePercentage'] ?? 0}%',
+                          style: BeastTypography.metricLarge,
+                        ),
+                        const SizedBox(height: BeastSpacing.sm),
+                        BeastBadge(
+                          label: 'Overall Grade: ${summary['overallGrade'] ?? "N/A"}',
+                          backgroundColor: BeastColors.peach200,
+                          textColor: BeastColors.dark900,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Total Exams Evaluated: ${summary['totalExams'] ?? 0}',
+                          style: BeastTypography.caption,
+                        ),
                       ],
                     ),
                   ),
-                ),
-
-                // TAB 2: EXAM SCHEDULES
-                RefreshIndicator(
-                  onRefresh: () => student.fetchExamsAndResults(),
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: student.exams.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  const SizedBox(height: BeastSpacing.xl),
+                ],
+                const BeastSectionHeader(title: 'Published Report Cards'),
+                const Divider(color: BeastColors.borderSubtle),
+                if (student.results.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: BeastSpacing.xxl),
+                    child: BeastEmptyState(
+                      icon: Icons.emoji_events_outlined,
+                      title: 'No Examination Results',
+                      message: 'Evaluated examination scorecards and faculty feedback will be published here.',
+                    ),
+                  )
+                else
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: student.results.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: BeastSpacing.md),
                     itemBuilder: (ctx, i) {
-                      final exam = student.exams[i];
-                      return AppCard(
+                      final r = student.results[i];
+                      return BeastCard(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                  exam.title,
-                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primaryLight.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    exam.examType.toUpperCase(),
-                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary),
-                                  ),
+                                Text(r.examTitle ?? 'Assessment', style: BeastTypography.title),
+                                BeastBadge(
+                                  label: 'Grade ${r.grade ?? "-"}',
+                                  backgroundColor: BeastColors.surfaceWarm,
+                                  textColor: BeastColors.dark900,
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Duration: ${exam.startDate} to ${exam.endDate}',
-                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            const SizedBox(height: BeastSpacing.sm),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  r.subjectName ?? 'Subject',
+                                  style: BeastTypography.body.copyWith(color: BeastColors.textSecondary),
+                                ),
+                                Text(
+                                  '${r.marksObtained.toStringAsFixed(0)} / ${r.maxMarks.toStringAsFixed(0)} (${r.percentage.toStringAsFixed(1)}%)',
+                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                                ),
+                              ],
                             ),
-                            if (exam.instructions != null && exam.instructions!.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                exam.instructions!,
-                                style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                            const SizedBox(height: 8),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: (r.percentage / 100).clamp(0.0, 1.0),
+                                backgroundColor: BeastColors.neutral100,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  r.percentage >= 40 ? BeastColors.success : BeastColors.danger,
+                                ),
+                                minHeight: 6,
                               ),
-                            ],
-                            if (exam.subjects.isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              const Divider(height: 1),
-                              const SizedBox(height: 8),
-                              ...exam.subjects.map((s) => Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 4),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text('${s.subjectName} (${s.subjectCode})', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                        Text('${s.examDate} @ ${s.startTime} (${s.maxMarks} marks)', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                                      ],
-                                    ),
-                                  )),
+                            ),
+                            if (r.feedback != null && r.feedback!.isNotEmpty) ...[
+                              const SizedBox(height: BeastSpacing.md),
+                              Text(
+                                'Teacher Remarks: ${r.feedback}',
+                                style: BeastTypography.caption.copyWith(fontStyle: FontStyle.italic),
+                              ),
                             ],
                           ],
                         ),
                       );
                     },
                   ),
-                ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSchedulesTab(StudentProvider student) {
+    final exams = student.exams;
+
+    return RefreshIndicator(
+      onRefresh: () => student.fetchExamsAndResults(),
+      color: BeastColors.brandPrimary,
+      child: exams.isEmpty
+          ? const BeastEmptyState(
+              icon: Icons.calendar_month_outlined,
+              title: 'No Upcoming Exams',
+              message: 'Institutional term tests, unit assessments, and mock exams will appear here.',
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.all(BeastSpacing.lg),
+              itemCount: exams.length,
+              separatorBuilder: (_, __) => const SizedBox(height: BeastSpacing.md),
+              itemBuilder: (ctx, i) {
+                final e = exams[i];
+                return BeastCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(e.title, style: BeastTypography.title),
+                          BeastBadge(
+                            label: e.examType,
+                            backgroundColor: BeastColors.peach200,
+                            textColor: BeastColors.dark900,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Scheduled: ${e.startDate} to ${e.endDate}',
+                        style: BeastTypography.caption,
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
     );
   }

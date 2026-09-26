@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/beast_tokens.dart';
 import '../../core/services/api_service.dart';
-import '../../widgets/app_card.dart';
+import '../../widgets/beast_components.dart';
 
 class TeacherResultsScreen extends StatefulWidget {
   const TeacherResultsScreen({super.key});
@@ -36,7 +36,7 @@ class _TeacherResultsScreenState extends State<TeacherResultsScreen> {
       final newMarks = <String, TextEditingController>{};
       final newFeedback = <String, TextEditingController>{};
       for (var s in _students) {
-        final stuId = s['student_id'];
+        final stuId = s['student_id']?.toString() ?? '';
         newMarks[stuId] = TextEditingController(text: s['marks_obtained'] != null ? s['marks_obtained'].toString() : '');
         newFeedback[stuId] = TextEditingController(text: s['feedback'] ?? '');
       }
@@ -56,7 +56,7 @@ class _TeacherResultsScreenState extends State<TeacherResultsScreen> {
     final marksData = <Map<String, dynamic>>[];
 
     for (var s in _students) {
-      final stuId = s['student_id'];
+      final stuId = s['student_id']?.toString() ?? '';
       final text = _marksControllers[stuId]?.text.trim() ?? '';
       if (text.isNotEmpty) {
         marksData.add({
@@ -79,7 +79,8 @@ class _TeacherResultsScreenState extends State<TeacherResultsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(res.success ? 'Examination results recorded successfully!' : 'Failed to save results.'),
-          backgroundColor: res.success ? AppColors.success : AppColors.error,
+          backgroundColor: res.success ? BeastColors.success : BeastColors.danger,
+          behavior: SnackBarBehavior.floating,
         ),
       );
       if (res.success) {
@@ -90,132 +91,155 @@ class _TeacherResultsScreenState extends State<TeacherResultsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final maxMarks = _subjectInfo?['max_marks'] ?? 100;
+    final subjectName = _subjectInfo?['subject_name'] ?? 'Physics (PHY-12)';
+    final examName = _subjectInfo?['exam_name'] ?? 'Mid-Term Assessment 2026';
+
     return Scaffold(
+      backgroundColor: BeastColors.scaffoldBackground,
       appBar: AppBar(
-        title: const Text('Enter Examination Marks'),
+        title: const Text('Examination Scoring Studio'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Refresh',
+            onPressed: _loadResultsSheet,
+          ),
+        ],
+      ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(BeastSpacing.lg),
+        decoration: BoxDecoration(
+          color: BeastColors.white,
+          border: const Border(top: BorderSide(color: BeastColors.borderSubtle)),
+          boxShadow: BeastShadows.card,
+        ),
+        child: SafeArea(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Total: ${_students.length} students enrolled',
+                style: BeastTypography.bodyMedium,
+              ),
+              BeastPrimaryButton(
+                label: _saving ? 'Publishing...' : 'Publish Scores',
+                icon: Icons.check_circle_rounded,
+                isLoading: _saving,
+                onPressed: _saveResults,
+              ),
+            ],
+          ),
+        ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const BeastLoadingState(message: 'Loading exam scoring roster...')
           : Column(
               children: [
-                // Subject Info Header
+                // Info Banner
                 Container(
-                  padding: const EdgeInsets.all(16),
-                  color: AppColors.surface,
+                  color: BeastColors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: BeastSpacing.lg, vertical: BeastSpacing.md),
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(BeastSpacing.md),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
+                          color: BeastColors.surfaceWarm,
+                          borderRadius: BorderRadius.circular(BeastRadius.sm),
                         ),
-                        child: const Icon(Icons.assessment_outlined, color: AppColors.primary, size: 24),
+                        child: const Icon(Icons.grade_outlined, color: BeastColors.dark900, size: 24),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: BeastSpacing.md),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              _subjectInfo?['exam_title'] ?? 'Mid-Term Assessment 2026',
-                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-                            ),
-                            Text(
-                              '${_subjectInfo?['subject_name']} (${_subjectInfo?['subject_code']}) • Max Marks: ${_subjectInfo?['max_marks'] ?? 100}',
-                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                            ),
+                            Text(examName, style: BeastTypography.title.copyWith(fontSize: 16)),
+                            Text('$subjectName • Max Marks: $maxMarks', style: BeastTypography.caption),
                           ],
                         ),
                       ),
                     ],
                   ),
                 ),
-                const Divider(height: 1),
+                const Divider(color: BeastColors.borderSubtle, height: 1),
 
                 Expanded(
                   child: _students.isEmpty
-                      ? const Center(child: Text('No students found for this assessment.'))
+                      ? const BeastEmptyState(
+                          icon: Icons.assignment_outlined,
+                          title: 'No Students Enrolled',
+                          message: 'No enrolled students were found for this examination subject.',
+                        )
                       : ListView.separated(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.only(
+                            left: BeastSpacing.lg,
+                            right: BeastSpacing.lg,
+                            top: BeastSpacing.md,
+                            bottom: 80,
+                          ),
                           itemCount: _students.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          separatorBuilder: (_, __) => const SizedBox(height: BeastSpacing.sm),
                           itemBuilder: (ctx, i) {
-                            final stu = _students[i];
-                            final stuId = stu['student_id'];
-                            return AppCard(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                            final s = _students[i];
+                            final stuId = s['student_id']?.toString() ?? '';
+                            final name = s['name'] ?? 'Student';
+                            final rollNo = s['roll_number'] ?? '${i + 1}';
+
+                            return BeastCard(
+                              padding: const EdgeInsets.all(BeastSpacing.md),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        stu['student_name'] ?? 'Student',
-                                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                                  Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      color: BeastColors.neutral100,
+                                      borderRadius: BorderRadius.circular(BeastRadius.xs),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        '$rollNo',
+                                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
                                       ),
-                                      if (stu['grade'] != null)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.successLight,
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            'Grade ${stu['grade']}',
-                                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 11, color: AppColors.success),
-                                          ),
-                                        ),
-                                    ],
+                                    ),
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(stu['student_id_number'] ?? '', style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
-                                  const SizedBox(height: 10),
-                                  Row(
-                                    children: [
-                                      SizedBox(
-                                        width: 120,
-                                        child: TextField(
-                                          controller: _marksControllers[stuId],
-                                          keyboardType: TextInputType.number,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Marks',
-                                            hintText: 'e.g. 88.5',
-                                            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                          ),
-                                        ),
+                                  const SizedBox(width: BeastSpacing.md),
+                                  Expanded(
+                                    flex: 3,
+                                    child: Text(name, style: BeastTypography.bodyMedium),
+                                  ),
+                                  const SizedBox(width: BeastSpacing.md),
+                                  SizedBox(
+                                    width: 80,
+                                    child: TextField(
+                                      controller: _marksControllers[stuId],
+                                      keyboardType: TextInputType.number,
+                                      textAlign: TextAlign.center,
+                                      decoration: InputDecoration(
+                                        hintText: '0 - $maxMarks',
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                                       ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: TextField(
-                                          controller: _feedbackControllers[stuId],
-                                          decoration: const InputDecoration(
-                                            labelText: 'Faculty Feedback',
-                                            hintText: 'e.g. Excellent mechanics clarity',
-                                            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                          ),
-                                        ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: BeastSpacing.md),
+                                  Expanded(
+                                    flex: 4,
+                                    child: TextField(
+                                      controller: _feedbackControllers[stuId],
+                                      decoration: const InputDecoration(
+                                        hintText: 'Remarks / Feedback',
+                                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                       ),
-                                    ],
+                                    ),
                                   ),
                                 ],
                               ),
                             );
                           },
                         ),
-                ),
-
-                // Save Button Bar
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  color: AppColors.surface,
-                  child: ElevatedButton.icon(
-                    onPressed: _saving ? null : _saveResults,
-                    icon: _saving
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.check),
-                    label: Text(_saving ? 'Recording Scores...' : 'Save & Publish Examination Marks'),
-                  ),
                 ),
               ],
             ),

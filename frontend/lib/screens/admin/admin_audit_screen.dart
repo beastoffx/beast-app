@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/beast_tokens.dart';
 import '../../providers/admin_provider.dart';
-import '../../widgets/app_card.dart';
+import '../../widgets/beast_components.dart';
 
 class AdminAuditScreen extends StatefulWidget {
   const AdminAuditScreen({super.key});
@@ -20,93 +20,139 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
     });
   }
 
+  void _showLogDetail(BuildContext context, dynamic log) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(log['action'] ?? 'Audit Event', style: BeastTypography.h3),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Entity: ${(log['entity_type'] ?? 'system').toUpperCase()}', style: BeastTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
+              Text('Actor: ${log['user_name'] ?? "System"} (${log['user_email'] ?? "internal"})', style: BeastTypography.caption),
+              Text('Timestamp: ${log['created_at']}', style: BeastTypography.caption),
+              Text('IP Address: ${log['ip_address'] ?? "local"}', style: BeastTypography.caption),
+              const SizedBox(height: 14),
+              const Text('Payload Details:', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: BeastColors.neutral100,
+                  borderRadius: BorderRadius.circular(BeastRadius.sm),
+                  border: Border.all(color: BeastColors.borderSubtle),
+                ),
+                child: Text(
+                  log['details_json']?.toString() ?? 'No extra parameters.',
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final admin = Provider.of<AdminProvider>(context);
 
     return Scaffold(
+      backgroundColor: BeastColors.surfaceNeutral,
       appBar: AppBar(
-        title: const Text('Administrative Audit Trail'),
+        title: Text('Administrative Audit Ledger', style: BeastTypography.h3),
+        backgroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: BeastColors.dark900),
             onPressed: () => admin.fetchAuditLogs(),
           ),
         ],
       ),
       body: admin.isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BeastLoadingState(message: 'Loading forensic audit trail...'))
           : admin.auditLogs.isEmpty
-              ? const EmptyStateView(
+              ? const BeastEmptyState(
                   icon: Icons.security_outlined,
                   title: 'Audit Log Empty',
-                  description: 'All sensitive system actions, logins, grading, and attendance modifications will be recorded here.',
+                  subtitle: 'All sensitive system actions, logins, grading, and attendance modifications will be recorded here.',
                 )
               : RefreshIndicator(
                   onRefresh: () => admin.fetchAuditLogs(),
                   child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(BeastSpacing.lg),
                     itemCount: admin.auditLogs.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, __) => const SizedBox(height: BeastSpacing.md),
                     itemBuilder: (ctx, i) {
                       final log = admin.auditLogs[i];
-                      return AppCard(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryLight.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(8),
+                      return InkWell(
+                        onTap: () => _showLogDetail(context, log),
+                        borderRadius: BorderRadius.circular(BeastRadius.md),
+                        child: BeastCard(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: BeastColors.peach200,
+                                  borderRadius: BorderRadius.circular(BeastRadius.sm),
+                                ),
+                                child: const Icon(Icons.shield_outlined, size: 20, color: BeastColors.dark900),
                               ),
-                              child: const Icon(Icons.shield_outlined, size: 20, color: AppColors.primary),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        log['action'] ?? 'ACTION',
-                                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(color: AppColors.surfaceElevated, borderRadius: BorderRadius.circular(4)),
-                                        child: Text(
-                                          (log['entity_type'] ?? 'system').toUpperCase(),
-                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          log['action'] ?? 'ACTION',
+                                          style: BeastTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700),
                                         ),
+                                        BeastBadge(
+                                          label: (log['entity_type'] ?? 'system').toUpperCase(),
+                                          variant: BeastBadgeVariant.neutral,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Actor: ${log['user_name'] ?? "System"} (${log['user_email'] ?? "internal"})',
+                                      style: BeastTypography.caption,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Time: ${log['created_at']} • IP: ${log['ip_address'] ?? "local"}',
+                                      style: BeastTypography.caption.copyWith(color: BeastColors.textMuted),
+                                    ),
+                                    if (log['details_json'] != null) ...[
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        '${log['details_json']}',
+                                        style: BeastTypography.caption.copyWith(fontStyle: FontStyle.italic),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Actor: ${log['user_name'] ?? "System"} (${log['user_email'] ?? "internal"})',
-                                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Time: ${log['created_at']} • IP: ${log['ip_address'] ?? "local"}',
-                                    style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
-                                  ),
-                                  if (log['details_json'] != null) ...[
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      '${log['details_json']}',
-                                      style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: AppColors.textSecondary),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
                                   ],
-                                ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       );
                     },

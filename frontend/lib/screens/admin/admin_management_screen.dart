@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/beast_tokens.dart';
 import '../../models/user_model.dart';
 import '../../providers/admin_provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/app_card.dart';
+import '../../widgets/beast_components.dart';
 
 class AdminManagementScreen extends StatefulWidget {
   const AdminManagementScreen({super.key});
@@ -40,18 +40,21 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
     final isCurrentUserSuper = authProvider.user?.isSuperAdmin ?? false;
 
     return Scaffold(
+      backgroundColor: BeastColors.surfaceNeutral,
       appBar: AppBar(
-        title: const Text('Institutional Administrators'),
+        title: Text('Institutional Administrators', style: BeastTypography.h3),
+        backgroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: BeastColors.dark900),
             tooltip: 'Refresh Administrators',
             onPressed: _loadAdmins,
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.primary,
+        backgroundColor: BeastColors.dark900,
         icon: const Icon(Icons.person_add, color: Colors.white),
         label: const Text('Add Administrator', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         onPressed: () => _showCreateAdminDialog(context),
@@ -144,9 +147,9 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
-      selectedColor: AppColors.primaryLight.withOpacity(0.2),
+      selectedColor: BeastColors.peach300.withValues(alpha: 0.2),
       labelStyle: TextStyle(
-        color: isSelected ? AppColors.primary : Colors.black87,
+        color: isSelected ? BeastColors.primary : Colors.black87,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
       onSelected: (selected) {
@@ -159,29 +162,31 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
   }
 
   Widget _buildAdminCard(BuildContext context, AdminUserModel admin, bool isSelf, bool isCurrentUserSuper) {
-    Color statusColor = Colors.green;
     String statusLabel = 'ACTIVE';
     if (admin.isSuspended) {
-      statusColor = Colors.orange;
       statusLabel = 'SUSPENDED';
     } else if (admin.isArchived) {
-      statusColor = Colors.grey;
       statusLabel = 'ARCHIVED';
     }
 
-    return AppCard(
+    return BeastCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: admin.isSuperAdmin ? Colors.deepPurple.shade100 : Colors.blue.shade100,
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: admin.isSuperAdmin ? BeastColors.peach200 : BeastColors.neutral200,
+                  borderRadius: BorderRadius.circular(BeastRadius.sm),
+                ),
                 child: Icon(
                   admin.isSuperAdmin ? Icons.workspace_premium : Icons.manage_accounts,
-                  color: admin.isSuperAdmin ? Colors.deepPurple : Colors.blue.shade800,
+                  color: BeastColors.dark900,
+                  size: 24,
                 ),
               ),
               const SizedBox(width: 14),
@@ -194,7 +199,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                         Flexible(
                           child: Text(
                             admin.name,
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: BeastTypography.bodyLarge.copyWith(fontWeight: FontWeight.w700),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -203,11 +208,11 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: Colors.blue.shade200),
+                              color: BeastColors.peach100,
+                              borderRadius: BorderRadius.circular(BeastRadius.xs),
+                              border: Border.all(color: BeastColors.peach300),
                             ),
-                            child: const Text('YOU', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue)),
+                            child: const Text('YOU', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: BeastColors.dark900)),
                           ),
                         ],
                       ],
@@ -215,12 +220,12 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                     const SizedBox(height: 2),
                     Text(
                       admin.email,
-                      style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                      style: BeastTypography.caption,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'ID: ${admin.adminIdNumber}  •  ${admin.designation ?? 'Administrator'}',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                      style: BeastTypography.caption.copyWith(fontWeight: FontWeight.w600, color: BeastColors.textSecondary),
                     ),
                   ],
                 ),
@@ -228,37 +233,12 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // Role Badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: admin.isSuperAdmin ? Colors.deepPurple.shade50 : Colors.indigo.shade50,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: admin.isSuperAdmin ? Colors.deepPurple : Colors.indigo),
-                    ),
-                    child: Text(
-                      admin.isSuperAdmin ? 'SUPER ADMIN' : 'ADMIN',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: admin.isSuperAdmin ? Colors.deepPurple : Colors.indigo,
-                      ),
-                    ),
+                  BeastBadge(
+                    label: admin.isSuperAdmin ? 'SUPER ADMIN' : 'ADMIN',
+                    variant: admin.isSuperAdmin ? BeastBadgeVariant.peach : BeastBadgeVariant.neutral,
                   ),
                   const SizedBox(height: 6),
-                  // Status Badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: statusColor),
-                    ),
-                    child: Text(
-                      statusLabel,
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: statusColor),
-                    ),
-                  ),
+                  BeastStatusBadge(status: statusLabel),
                 ],
               ),
             ],
@@ -430,7 +410,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              style: ElevatedButton.styleFrom(backgroundColor: BeastColors.primary),
               onPressed: () async {
                 if (nameCtrl.text.isEmpty || emailCtrl.text.isEmpty || passwordCtrl.text.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill required fields (Name, Email, Password)')));
@@ -540,7 +520,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              style: ElevatedButton.styleFrom(backgroundColor: BeastColors.primary),
               onPressed: () async {
                 final permissions = {
                   ...admin.permissions,
@@ -769,8 +749,8 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                           return ListTile(
                             leading: const CircleAvatar(
                               radius: 16,
-                              backgroundColor: AppColors.surfaceElevated,
-                              child: Icon(Icons.bolt, size: 16, color: AppColors.primary),
+                              backgroundColor: BeastColors.peach200,
+                              child: Icon(Icons.bolt, size: 16, color: BeastColors.primary),
                             ),
                             title: Text(log['action'] ?? 'ACTION', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                             subtitle: Text('Target: ${log['target_entity']} #${log['target_id']}\nAt: ${log['created_at']}'),

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/beast_tokens.dart';
 import '../../providers/admin_provider.dart';
-import '../../widgets/app_card.dart';
+import '../../widgets/beast_components.dart';
 import '../../models/fee_exam_model.dart';
 
 class AdminFeesScreen extends StatefulWidget {
@@ -30,28 +30,44 @@ class _AdminFeesScreenState extends State<AdminFeesScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Record Payment: ${fee.studentName}'),
+        title: Text('Record Payment', style: BeastTypography.h3),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Invoice: ${fee.feeTitle} • Billed: ₹${fee.amount}', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-            const SizedBox(height: 14),
+            Text('Student: ${fee.studentName ?? "N/A"}', style: BeastTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
+            Text('Invoice: ${fee.feeTitle} • Billed: ₹${fee.amount.toStringAsFixed(0)}', style: BeastTypography.caption),
+            const SizedBox(height: 16),
             TextField(
               controller: paidAmountController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Received Amount (₹)', prefixText: '₹ '),
+              decoration: const InputDecoration(
+                labelText: 'Received Amount (₹)',
+                prefixText: '₹ ',
+                border: OutlineInputBorder(),
+              ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             TextField(
               controller: notesController,
-              decoration: const InputDecoration(labelText: 'Payment Note / Method', hintText: 'e.g. Bank transfer ref #9042'),
+              decoration: const InputDecoration(
+                labelText: 'Payment Reference / Note',
+                hintText: 'e.g. Bank transfer ref #9042',
+                border: OutlineInputBorder(),
+              ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: BeastColors.textSecondary)),
+          ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: BeastColors.dark900,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () async {
               final amt = double.tryParse(paidAmountController.text.trim()) ?? 0.0;
               final admin = Provider.of<AdminProvider>(context, listen: false);
@@ -76,11 +92,14 @@ class _AdminFeesScreenState extends State<AdminFeesScreen> {
     final stats = admin.feeStats;
 
     return Scaffold(
+      backgroundColor: BeastColors.surfaceNeutral,
       appBar: AppBar(
-        title: const Text('Institutional Fee Ledger'),
+        title: Text('Institutional Fee Ledger', style: BeastTypography.h3),
+        backgroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: BeastColors.dark900),
             onPressed: () => admin.fetchFees(status: _statusFilter),
           ),
         ],
@@ -90,70 +109,73 @@ class _AdminFeesScreenState extends State<AdminFeesScreen> {
           // Financial Summary Strip
           if (stats != null) ...[
             Container(
-              padding: const EdgeInsets.all(16),
-              color: AppColors.surface,
+              padding: const EdgeInsets.all(BeastSpacing.lg),
+              color: Colors.white,
               child: Row(
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('BILLED', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.textMuted)),
-                        Text('₹${stats['totalBilled'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                      ],
+                    child: BeastStatCard(
+                      title: 'Total Billed',
+                      value: '₹${stats['totalBilled'] ?? 0}',
+                      icon: Icons.receipt_long_outlined,
                     ),
                   ),
+                  const SizedBox(width: BeastSpacing.md),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('COLLECTED', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.success)),
-                        Text('₹${stats['totalCollected'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.success)),
-                      ],
+                    child: BeastStatCard(
+                      title: 'Collected',
+                      value: '₹${stats['totalCollected'] ?? 0}',
+                      icon: Icons.check_circle_outline,
                     ),
                   ),
+                  const SizedBox(width: BeastSpacing.md),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('OUTSTANDING', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.error)),
-                        Text('₹${stats['totalOutstanding'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.error)),
-                      ],
+                    child: BeastStatCard(
+                      title: 'Outstanding',
+                      value: '₹${stats['totalOutstanding'] ?? 0}',
+                      icon: Icons.pending_actions_outlined,
                     ),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1),
+            const Divider(height: 1, color: BeastColors.borderSubtle),
           ],
 
           // Filter bar
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          Container(
+            color: Colors.white,
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: BeastSpacing.lg, vertical: BeastSpacing.sm),
             child: Row(
               children: [
-                FilterChip(
-                  label: const Text('All'),
+                ChoiceChip(
+                  label: const Text('All Invoices'),
                   selected: _statusFilter == null,
+                  selectedColor: BeastColors.peach200,
+                  backgroundColor: BeastColors.neutral100,
                   onSelected: (_) {
                     setState(() => _statusFilter = null);
                     admin.fetchFees();
                   },
                 ),
                 const SizedBox(width: 8),
-                FilterChip(
+                ChoiceChip(
                   label: const Text('Pending'),
                   selected: _statusFilter == 'pending',
+                  selectedColor: BeastColors.peach200,
+                  backgroundColor: BeastColors.neutral100,
                   onSelected: (_) {
                     setState(() => _statusFilter = 'pending');
                     admin.fetchFees(status: 'pending');
                   },
                 ),
                 const SizedBox(width: 8),
-                FilterChip(
+                ChoiceChip(
                   label: const Text('Paid'),
                   selected: _statusFilter == 'paid',
+                  selectedColor: BeastColors.peach200,
+                  backgroundColor: BeastColors.neutral100,
                   onSelected: (_) {
                     setState(() => _statusFilter = 'paid');
                     admin.fetchFees(status: 'paid');
@@ -162,73 +184,76 @@ class _AdminFeesScreenState extends State<AdminFeesScreen> {
               ],
             ),
           ),
-          const Divider(height: 1),
+          const Divider(height: 1, color: BeastColors.borderSubtle),
 
           Expanded(
             child: admin.isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: BeastLoadingState(message: 'Loading fee ledger...'))
                 : admin.fees.isEmpty
-                    ? const EmptyStateView(
+                    ? const BeastEmptyState(
                         icon: Icons.receipt_long_outlined,
                         title: 'No Fee Records',
-                        description: 'No fee invoices match the selected filter.',
+                        subtitle: 'No fee invoices match the selected criteria.',
                       )
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: admin.fees.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (ctx, i) {
-                          final f = admin.fees[i];
-                          return AppCard(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      f.studentName ?? 'Student',
-                                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                                    ),
-                                    if (f.isPaid)
-                                      StatusBadge.paid()
-                                    else
-                                      StatusBadge.pending(),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${f.feeTitle} • ID: ${f.studentIdNumber ?? ""} • Due: ${f.dueDate}',
-                                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                                ),
-                                const SizedBox(height: 10),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      '₹${f.amount.toStringAsFixed(0)} (Paid: ₹${f.paidAmount.toStringAsFixed(0)})',
-                                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                                    ),
-                                    if (!f.isPaid)
-                                      ElevatedButton(
-                                        onPressed: () => _showRecordPaymentDialog(f),
-                                        style: ElevatedButton.styleFrom(
-                                          minimumSize: const Size(110, 32),
-                                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                    : RefreshIndicator(
+                        onRefresh: () => admin.fetchFees(status: _statusFilter),
+                        child: ListView.separated(
+                          padding: const EdgeInsets.all(BeastSpacing.lg),
+                          itemCount: admin.fees.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: BeastSpacing.md),
+                          itemBuilder: (ctx, i) {
+                            final f = admin.fees[i];
+                            return BeastCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          f.studentName ?? 'Student',
+                                          style: BeastTypography.bodyLarge.copyWith(fontWeight: FontWeight.w700),
                                         ),
-                                        child: const Text('Record Payment', style: TextStyle(fontSize: 11)),
-                                      )
-                                    else if (f.receiptReference != null)
-                                      Text(
-                                        f.receiptReference!,
-                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.success),
                                       ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+                                      BeastStatusBadge(status: f.isPaid ? 'PAID' : 'PENDING'),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${f.feeTitle} • ID: ${f.studentIdNumber ?? ""} • Due: ${f.dueDate}',
+                                    style: BeastTypography.caption,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        '₹${f.amount.toStringAsFixed(0)} (Paid: ₹${f.paidAmount.toStringAsFixed(0)})',
+                                        style: BeastTypography.bodyLarge.copyWith(fontWeight: FontWeight.w800, color: BeastColors.dark900),
+                                      ),
+                                      if (!f.isPaid)
+                                        ElevatedButton(
+                                          onPressed: () => _showRecordPaymentDialog(f),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: BeastColors.dark900,
+                                            foregroundColor: Colors.white,
+                                            visualDensity: VisualDensity.compact,
+                                          ),
+                                          child: const Text('Record Payment', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                        )
+                                      else if (f.receiptReference != null)
+                                        Text(
+                                          f.receiptReference!,
+                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: BeastColors.success),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
                       ),
           ),
         ],

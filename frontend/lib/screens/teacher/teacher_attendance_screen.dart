@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/beast_tokens.dart';
 import '../../providers/teacher_provider.dart';
-import '../../widgets/app_card.dart';
+import '../../widgets/beast_components.dart';
 
 class TeacherAttendanceScreen extends StatefulWidget {
   const TeacherAttendanceScreen({super.key});
@@ -16,8 +16,8 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
   String _selectedBatchId = 'batch-pcm-2027-a';
   String _selectedSubjectId = 'sub-phy-12';
   DateTime _selectedDate = DateTime.now();
-  Map<String, String> _statuses = {}; // student_id -> 'present'|'absent'|'late'|'excused'
-  Map<String, String> _remarks = {};  // student_id -> remarks
+  Map<String, String> _statuses = {};
+  Map<String, String> _remarks = {};
   bool _saving = false;
 
   @override
@@ -36,7 +36,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
       final newStatuses = <String, String>{};
       final newRemarks = <String, String>{};
       for (var s in sheet) {
-        final stuId = s['student_id'];
+        final stuId = s['student_id']?.toString() ?? '';
         newStatuses[stuId] = s['status'] ?? 'present';
         newRemarks[stuId] = s['remarks'] ?? '';
       }
@@ -47,10 +47,38 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
     });
   }
 
-  void _markAll(String status) {
-    final updated = <String, String>{};
-    _statuses.forEach((key, _) => updated[key] = status);
-    setState(() => _statuses = updated);
+  void _confirmMarkAll(String status, String label) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(BeastRadius.md)),
+        backgroundColor: BeastColors.white,
+        title: Text('Mark All $label?', style: BeastTypography.title),
+        content: Text(
+          'This will set every enrolled student in this batch to "$label".',
+          style: BeastTypography.body.copyWith(color: BeastColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: BeastColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              final updated = <String, String>{};
+              _statuses.forEach((key, _) => updated[key] = status);
+              setState(() => _statuses = updated);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: BeastColors.brandPrimary,
+              foregroundColor: BeastColors.white,
+            ),
+            child: Text('Confirm $label'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleSave() async {
@@ -79,8 +107,8 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(ok ? 'Attendance for ${records.length} students saved successfully!' : 'Failed to save attendance.'),
-          backgroundColor: ok ? AppColors.success : AppColors.error,
+          content: Text(ok ? 'Attendance for ${records.length} students recorded successfully!' : 'Failed to save attendance.'),
+          backgroundColor: ok ? BeastColors.success : BeastColors.danger,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -91,23 +119,78 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
   Widget build(BuildContext context) {
     final teacher = Provider.of<TeacherProvider>(context);
     final sheet = teacher.attendanceSheet;
+    final dateDisplay = DateFormat('EEE, dd MMM yyyy').format(_selectedDate);
+
+    int presentCount = 0;
+    int absentCount = 0;
+    int lateCount = 0;
+    _statuses.forEach((_, st) {
+      if (st == 'present') presentCount++;
+      else if (st == 'absent') absentCount++;
+      else if (st == 'late') lateCount++;
+    });
 
     return Scaffold(
+      backgroundColor: BeastColors.scaffoldBackground,
       appBar: AppBar(
-        title: const Text('Take Batch Attendance'),
+        title: const Text('Batch Roll-Call'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Reload Roster',
             onPressed: _loadSheet,
           ),
         ],
       ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(BeastSpacing.lg),
+        decoration: BoxDecoration(
+          color: BeastColors.white,
+          border: const Border(top: BorderSide(color: BeastColors.borderSubtle)),
+          boxShadow: BeastShadows.card,
+        ),
+        child: SafeArea(
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'P: $presentCount  •  A: $absentCount  •  L: $lateCount',
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: BeastColors.dark900),
+                    ),
+                    Text(
+                      'Total: ${sheet.length} students',
+                      style: BeastTypography.caption,
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: _saving ? null : _handleSave,
+                icon: _saving
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.check_rounded, size: 18),
+                label: Text(_saving ? 'Saving...' : 'Save Attendance'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: BeastColors.brandPrimary,
+                  foregroundColor: BeastColors.white,
+                  minimumSize: const Size(160, 48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(BeastRadius.sm)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
       body: Column(
         children: [
-          // Selectors Card
+          // Filter Header Bar
           Container(
-            padding: const EdgeInsets.all(16),
-            color: AppColors.surface,
+            color: BeastColors.white,
+            padding: const EdgeInsets.symmetric(horizontal: BeastSpacing.lg, vertical: BeastSpacing.md),
             child: Column(
               children: [
                 Row(
@@ -117,8 +200,9 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                         value: _selectedBatchId,
                         decoration: const InputDecoration(labelText: 'Batch', contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
                         items: const [
-                          DropdownMenuItem(value: 'batch-pcm-2027-a', child: Text('PCM-2027-A (Class 12)')),
-                          DropdownMenuItem(value: 'batch-pcb-2027-b', child: Text('PCB-2027-B (Class 12)')),
+                          DropdownMenuItem(value: 'batch-pcm-2027-a', child: Text('Class 12 - PCM Batch A')),
+                          DropdownMenuItem(value: 'batch-pcb-2027-a', child: Text('Class 12 - PCB Batch A')),
+                          DropdownMenuItem(value: 'batch-jee-adv-2027', child: Text('JEE Advanced Target')),
                         ],
                         onChanged: (val) {
                           if (val != null) {
@@ -128,14 +212,16 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                         },
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: BeastSpacing.md),
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         value: _selectedSubjectId,
                         decoration: const InputDecoration(labelText: 'Subject', contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
                         items: const [
-                          DropdownMenuItem(value: 'sub-phy-12', child: Text('Physics (PHY-12)')),
-                          DropdownMenuItem(value: 'sub-chm-12', child: Text('Chemistry (CHM-12)')),
+                          DropdownMenuItem(value: 'sub-phy-12', child: Text('Physics')),
+                          DropdownMenuItem(value: 'sub-chm-12', child: Text('Chemistry')),
+                          DropdownMenuItem(value: 'sub-mth-12', child: Text('Mathematics')),
+                          DropdownMenuItem(value: 'sub-bio-12', child: Text('Biology')),
                         ],
                         onChanged: (val) {
                           if (val != null) {
@@ -147,7 +233,7 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: BeastSpacing.sm),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -156,44 +242,51 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
                         final picked = await showDatePicker(
                           context: context,
                           initialDate: _selectedDate,
-                          firstDate: DateTime(2026, 1, 1),
-                          lastDate: DateTime(2027, 12, 31),
+                          firstDate: DateTime(2025),
+                          lastDate: DateTime.now().add(const Duration(days: 7)),
                         );
                         if (picked != null) {
                           setState(() => _selectedDate = picked);
                           _loadSheet();
                         }
                       },
-                      child: Row(
-                        children: [
-                          const Icon(Icons.event, size: 18, color: AppColors.primary),
-                          const SizedBox(width: 6),
-                          Text(
-                            DateFormat('EEE, dd MMM yyyy').format(_selectedDate),
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                          ),
-                          const Icon(Icons.arrow_drop_down),
-                        ],
+                      borderRadius: BorderRadius.circular(BeastRadius.xs),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.calendar_month_outlined, size: 16, color: BeastColors.dark900),
+                            const SizedBox(width: 6),
+                            Text(dateDisplay, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.arrow_drop_down, size: 16),
+                          ],
+                        ),
                       ),
                     ),
                     Row(
                       children: [
                         OutlinedButton(
-                          onPressed: () => _markAll('present'),
+                          onPressed: () => _confirmMarkAll('present', 'Present'),
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size(80, 32),
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            side: const BorderSide(color: BeastColors.success),
+                            foregroundColor: BeastColors.success,
                           ),
-                          child: const Text('All Present', style: TextStyle(fontSize: 11)),
+                          child: const Text('All Present', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
                         ),
                         const SizedBox(width: 6),
                         OutlinedButton(
-                          onPressed: () => _markAll('absent'),
+                          onPressed: () => _confirmMarkAll('absent', 'Absent'),
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size(80, 32),
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            side: const BorderSide(color: BeastColors.danger),
+                            foregroundColor: BeastColors.danger,
                           ),
-                          child: const Text('All Absent', style: TextStyle(fontSize: 11)),
+                          child: const Text('All Absent', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
                         ),
                       ],
                     ),
@@ -202,116 +295,109 @@ class _TeacherAttendanceScreenState extends State<TeacherAttendanceScreen> {
               ],
             ),
           ),
-          const Divider(height: 1),
+          const Divider(color: BeastColors.borderSubtle, height: 1),
 
-          // Student Attendance List
           Expanded(
             child: teacher.isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const BeastLoadingState(message: 'Loading student roster...')
                 : sheet.isEmpty
-                    ? const EmptyStateView(
-                        icon: Icons.people_outline,
-                        title: 'No Students Enrolled',
-                        description: 'There are no active student enrollments found in this batch.',
+                    ? const BeastEmptyState(
+                        icon: Icons.people_outline_rounded,
+                        title: 'No Students in Batch',
+                        message: 'No active student enrollments found in this batch.',
                       )
                     : ListView.separated(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.only(
+                          left: BeastSpacing.lg,
+                          right: BeastSpacing.lg,
+                          top: BeastSpacing.md,
+                          bottom: BeastSpacing.xxl,
+                        ),
                         itemCount: sheet.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        separatorBuilder: (_, __) => const SizedBox(height: BeastSpacing.sm),
                         itemBuilder: (ctx, i) {
-                          final stu = sheet[i];
-                          final stuId = stu['student_id'];
+                          final student = sheet[i];
+                          final stuId = student['student_id']?.toString() ?? '';
+                          final name = student['name'] ?? 'Student';
+                          final rollNo = student['roll_number'] ?? student['enrollment_number'] ?? '${i + 1}';
                           final currentStatus = _statuses[stuId] ?? 'present';
 
-                          return AppCard(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          return BeastCard(
+                            padding: const EdgeInsets.symmetric(horizontal: BeastSpacing.md, vertical: BeastSpacing.sm),
                             child: Row(
                               children: [
-                                CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: AppColors.primaryLight.withOpacity(0.12),
-                                  child: Text(
-                                    (stu['student_name'] ?? 'S')[0],
-                                    style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary),
+                                Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: BeastColors.neutral100,
+                                    borderRadius: BorderRadius.circular(BeastRadius.xs),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '$rollNo',
+                                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
+                                const SizedBox(width: BeastSpacing.md),
                                 Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        stu['student_name'] ?? 'Student',
-                                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                                      ),
-                                      Text(
-                                        stu['student_id_number'] ?? '',
-                                        style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
-                                      ),
-                                    ],
+                                  child: Text(
+                                    name,
+                                    style: BeastTypography.bodyMedium,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                // Segmented Attendance Buttons
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    _buildStatusButton(stuId, 'present', 'P', AppColors.success, currentStatus == 'present'),
-                                    const SizedBox(width: 6),
-                                    _buildStatusButton(stuId, 'late', 'L', AppColors.warning, currentStatus == 'late'),
-                                    const SizedBox(width: 6),
-                                    _buildStatusButton(stuId, 'absent', 'A', AppColors.error, currentStatus == 'absent'),
-                                  ],
-                                ),
+                                _buildStatusSegment(stuId, currentStatus),
                               ],
                             ),
                           );
                         },
                       ),
           ),
-
-          // Bottom Save Bar
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              border: const Border(top: BorderSide(color: AppColors.border)),
-            ),
-            child: ElevatedButton.icon(
-              onPressed: _saving ? null : _handleSave,
-              icon: _saving
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.check_circle_outline),
-              label: Text(_saving ? 'Recording Attendance...' : 'Save & Publish Attendance Record'),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildStatusButton(String studentId, String status, String label, Color color, bool isSelected) {
-    return InkWell(
+  Widget _buildStatusSegment(String stuId, String currentStatus) {
+    return Container(
+      decoration: BoxDecoration(
+        color: BeastColors.neutral100,
+        borderRadius: BorderRadius.circular(BeastRadius.sm),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _segmentBtn(stuId, 'present', 'P', currentStatus == 'present', BeastColors.success),
+          _segmentBtn(stuId, 'late', 'L', currentStatus == 'late', BeastColors.warning),
+          _segmentBtn(stuId, 'absent', 'A', currentStatus == 'absent', BeastColors.danger),
+        ],
+      ),
+    );
+  }
+
+  Widget _segmentBtn(String stuId, String statusValue, String label, bool isSelected, Color activeColor) {
+    return GestureDetector(
       onTap: () {
         setState(() {
-          _statuses[studentId] = status;
+          _statuses[stuId] = statusValue;
         });
       },
-      borderRadius: BorderRadius.circular(8),
       child: Container(
-        width: 34,
+        width: 38,
         height: 34,
         decoration: BoxDecoration(
-          color: isSelected ? color : color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: isSelected ? color : color.withOpacity(0.3), width: 1.5),
+          color: isSelected ? activeColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(BeastRadius.sm),
         ),
         child: Center(
           child: Text(
             label,
             style: TextStyle(
-              color: isSelected ? Colors.white : color,
-              fontWeight: FontWeight.w900,
               fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: isSelected ? BeastColors.white : BeastColors.textSecondary,
             ),
           ),
         ),

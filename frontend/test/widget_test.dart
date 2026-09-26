@@ -35,9 +35,9 @@ void main() {
     expect(find.text('Institutional Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
 
-    // Verify Role quick selector chips exist for demo/testing
-    expect(find.text('Student'), findsOneWidget);
-    expect(find.text('Teacher'), findsOneWidget);
-    expect(find.text('Admin'), findsOneWidget);
+    // Verify Institutional Onboarding & Activation actions exist
+    expect(find.text('New Applicant or Pre-Enrolled Student?'), findsOneWidget);
+    expect(find.text('Activate ID'), findsOneWidget);
+    expect(find.text('Apply / Track'), findsOneWidget);
   });
 }
