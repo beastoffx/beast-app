@@ -3,18 +3,26 @@ import 'package:flutter/foundation.dart';
 class ApiConstants {
   static const String _envBaseUrl = String.fromEnvironment('API_BASE_URL');
 
-  // Default production HTTPS URL for release builds (can be overridden via --dart-define=API_BASE_URL=https://...)
-  static const String _defaultProductionUrl = 'https://api.beastacademy.edu';
+  // Official production API URL on Render
+  static const String _defaultProductionUrl = 'https://beast-academy-api.onrender.com/api';
 
+  /// Returns the configured production API base URL
+  static String get productionApiUrl => _defaultProductionUrl;
+
+  /// Returns the base URL for HTTP requests.
+  /// In release mode, defaults to the production Render cloud backend.
+  /// Can be overridden at build time via --dart-define=API_BASE_URL=https://...
+  /// Trailing '/api' is normalized so that endpoint paths (which include '/api/...')
+  /// are cleanly concatenated without duplicate segments.
   static String get baseUrl {
     // 1. Explicit override via --dart-define=API_BASE_URL=...
     if (_envBaseUrl.isNotEmpty) {
-      return _envBaseUrl;
+      return _normalizeBaseUrl(_envBaseUrl);
     }
 
     // 2. Release builds for Web and Mobile across the Internet use HTTPS production backend
     if (kReleaseMode) {
-      return _defaultProductionUrl;
+      return _normalizeBaseUrl(_defaultProductionUrl);
     }
 
     // 3. Local development mode
@@ -24,6 +32,19 @@ class ApiConstants {
 
     // 4. Android emulator development loopback (or adb reverse tcp:5000 tcp:5000 for local USB test)
     return 'http://10.0.2.2:5000';
+  }
+
+  /// Normalizes the base URL by stripping trailing slashes and any trailing '/api'
+  /// so that concatenation with endpoints (e.g. '/api/auth/login') produces valid URIs.
+  static String _normalizeBaseUrl(String raw) {
+    var url = raw.trim();
+    while (url.endsWith('/')) {
+      url = url.substring(0, url.length - 1);
+    }
+    if (url.endsWith('/api')) {
+      url = url.substring(0, url.length - 4);
+    }
+    return url;
   }
 
   // Endpoints
