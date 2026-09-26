@@ -298,7 +298,7 @@ router.post('/', async (req, res) => {
   await transaction(async () => {
     await run(
       `INSERT INTO users (id, email, password_hash, role, name, phone, phone_verified, status, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, 0, 'active', 1)`,
+       VALUES (?, ?, ?, ?, ?, ?, false, 'active', true)`,
       [userId, cleanEmail, passwordHash, assignedRole, name, phone || null]
     );
 

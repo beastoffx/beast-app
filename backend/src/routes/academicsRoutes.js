@@ -284,7 +284,7 @@ router.post('/students', authenticateToken, authorizeRoles('admin'), async (req,
   await transaction(async () => {
     await run(
       `INSERT INTO users (id, email, password_hash, role, name, phone, phone_verified, status, is_active)
-       VALUES (?, ?, ?, 'student', ?, ?, 0, 'pending_activation', 1)`,
+       VALUES (?, ?, ?, 'student', ?, ?, false, 'pending_activation', true)`,
       [userId, email.trim().toLowerCase(), passwordHash, name, phone || null]
     );
 

@@ -200,6 +200,54 @@ function toPgSql(sql) {
   // Boolean column literals in SET or WHERE clauses
   out = out.replace(/\b(is_active|is_verified|phone_verified|is_current|is_pinned|is_published|is_read)\s*=\s*1\b/gi, '$1 = true');
   out = out.replace(/\b(is_active|is_verified|phone_verified|is_current|is_pinned|is_published|is_read)\s*=\s*0\b/gi, '$1 = false');
+  out = out.replace(/\b(is_active|is_verified|phone_verified|is_current|is_pinned|is_published|is_read)\s*=\s*\$(\d+)\b/gi, (_m, col, num) => {
+    return `${col} = ($${num}::text IN ('1', 'true', 't'))`;
+  });
+
+  // Boolean column literals and params in INSERT statements
+  const booleanCols = new Set(['is_active', 'is_verified', 'phone_verified', 'is_current', 'is_pinned', 'is_published', 'is_read']);
+  out = out.replace(/INSERT\s+(?:OR\s+\w+\s+)?INTO\s+([a-zA-Z0-9_]+)\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)/gi, (match, table, colsPart, valsPart) => {
+    const cols = colsPart.split(',').map(c => c.trim().toLowerCase());
+    const vals = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < valsPart.length; i++) {
+      const c = valsPart[i];
+      if (c === "'") {
+        inQuotes = !inQuotes;
+        cur += c;
+      } else if (c === ',' && !inQuotes) {
+        vals.push(cur.trim());
+        cur = '';
+      } else {
+        cur += c;
+      }
+    }
+    vals.push(cur.trim());
+
+    if (cols.length === vals.length) {
+      let changed = false;
+      for (let i = 0; i < cols.length; i++) {
+        if (booleanCols.has(cols[i])) {
+          const val = vals[i].trim();
+          if (val === '1') {
+            vals[i] = 'true';
+            changed = true;
+          } else if (val === '0') {
+            vals[i] = 'false';
+            changed = true;
+          } else if (/^\$\d+$/.test(val)) {
+            vals[i] = `(${val}::text IN ('1', 'true', 't'))`;
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        return `INSERT INTO ${table} (${colsPart}) VALUES (${vals.join(', ')})`;
+      }
+    }
+    return match;
+  });
 
   // Case-insensitive LIKE to ILIKE in PostgreSQL
   out = out.replace(/\bLIKE\b/g, 'ILIKE');

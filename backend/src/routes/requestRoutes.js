@@ -523,12 +523,13 @@ router.post('/:id/review', authenticateToken, authorizeRoles('teacher', 'admin',
               await run("UPDATE users SET role = 'teacher', updated_at = datetime('now') WHERE id = ?", [existingUser.id]);
             }
           }
+          await run("UPDATE users SET status = 'active', is_active = true, updated_at = datetime('now') WHERE id = ?", [existingUser.id]);
         } else {
           // New user creation
           createdUserId = `user-${request.requested_role.substring(0, 3)}-${Date.now()}`;
           await run(
             `INSERT INTO users (id, email, password_hash, role, name, phone, google_uid, status, is_active)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 1)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'active', true)`,
             [
               createdUserId,
               request.email,
