@@ -1,30 +1,30 @@
-# Environment & Secret files
-.env
-.env.*
-*.env
-*.env.*
-backend/.env
-backend/.env.*
-!.env.example
-!backend/.env.example
-
-# Keystores & signing credentials
-*.jks
-*.keystore
-*.p12
-*.pem
-*.key
-google-services.json
-GoogleService-Info.plist
-*service_account*.json
-*service-account*.json
-credentials*.json
-client_secret*.json
-
 # Node.js
 node_modules/
 npm-debug.log
 yarn-error.log
+# Secrets, Keys & Credentials
+.env
+.env.*
+*.env
+*.env.*
+!.env.example
+backend/.env
+backend/.env.*
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+*key.properties
+*keystore.properties
+*service-account*.json
+*service_account*.json
+*credentials*.json
+
+# Databases
 data/*.db
 data/*.db-journal
 data/*.db-wal
