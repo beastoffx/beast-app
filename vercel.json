@@ -1,7 +1,6 @@
 {
   "buildCommand": "cd frontend && bash vercel-build.sh",
   "outputDirectory": "frontend/build/web",
-  "cleanUrls": true,
   "rewrites": [
     {
       "source": "/(.*)",
