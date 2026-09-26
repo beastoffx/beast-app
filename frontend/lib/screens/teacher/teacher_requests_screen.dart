@@ -228,22 +228,24 @@ class _TeacherRequestsScreenState extends State<TeacherRequestsScreen> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.end,
                                   children: [
-                                    OutlinedButton(
+                                    OutlinedButton.icon(
                                       onPressed: () => _showRejectDialog(req),
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: BeastColors.danger,
                                         side: const BorderSide(color: BeastColors.danger),
                                       ),
-                                      child: const Text('Deny / Reject'),
+                                      icon: const Icon(Icons.close, size: 16),
+                                      label: const Text('Deny'),
                                     ),
                                     const SizedBox(width: BeastSpacing.md),
-                                    ElevatedButton(
+                                    ElevatedButton.icon(
                                       onPressed: () => _showApproveDialog(req),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: BeastColors.brandPrimary,
                                         foregroundColor: Colors.white,
                                       ),
-                                      child: const Text('Accept & Recommend'),
+                                      icon: const Icon(Icons.check, size: 16),
+                                      label: const Text('Allow & Recommend'),
                                     ),
                                   ],
                                 ),

@@ -449,41 +449,51 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
               ),
             ),
 
-          // Actions
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // Action Buttons: Allow / Deny / Delete
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: BeastColors.borderSubtle),
+          const SizedBox(height: 12),
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              IconButton(
+              TextButton.icon(
                 onPressed: () => _handleDelete(req['id'], req['name'] ?? 'Applicant'),
-                icon: const Icon(Icons.delete_outline, size: 20, color: BeastColors.error),
-                tooltip: 'Delete Application Permanently',
+                icon: const Icon(Icons.delete_forever, size: 18, color: BeastColors.error),
+                label: const Text('Delete', style: TextStyle(color: BeastColors.error, fontSize: 13, fontWeight: FontWeight.w600)),
               ),
-              if (canReview)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    OutlinedButton(
-                      onPressed: () => _showRejectDialog(req['id'], req['name'] ?? 'Applicant'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: BeastColors.error,
-                        side: const BorderSide(color: BeastColors.error),
-                      ),
-                      child: const Text('Deny / Reject'),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => _showRejectDialog(req['id'], req['name'] ?? 'Applicant'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: BeastColors.error,
+                      side: const BorderSide(color: BeastColors.error, width: 1.2),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: () => _showApproveDialog(req),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: BeastColors.dark900,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: Text(
-                        isSuperAdmin ? 'Accept & Activate' : 'Accept & Forward',
-                      ),
+                    icon: const Icon(Icons.close, size: 16, color: BeastColors.error),
+                    label: const Text('Deny', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: () => _showApproveDialog(req),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: BeastColors.dark900,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     ),
-                  ],
-                ),
+                    icon: const Icon(Icons.check_circle_outline, size: 16),
+                    label: Text(
+                      isSuperAdmin ? 'Allow & Activate' : 'Allow & Forward',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ],
