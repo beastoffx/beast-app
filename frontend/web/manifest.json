@@ -1,11 +1,11 @@
 {
-    "name": "beast_academy",
-    "short_name": "beast_academy",
+    "name": "B.E.A.S.T ACADEMY",
+    "short_name": "B.E.A.S.T",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0B132B",
+    "theme_color": "#1C2541",
+    "description": "B.E.A.S.T ACADEMY — Premier Educational Platform",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
