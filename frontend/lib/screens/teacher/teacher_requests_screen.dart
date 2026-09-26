@@ -217,7 +217,7 @@ class _TeacherRequestsScreenState extends State<TeacherRequestsScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Email: ${req['email']} • Phone: ${req['phone_number'] ?? 'N/A'}',
+                                  'Email: ${req['email']} • Phone: ${req['phone'] ?? req['phone_number'] ?? 'N/A'}',
                                   style: BeastTypography.caption,
                                 ),
                                 if (req['notes'] != null && req['notes'].toString().isNotEmpty) ...[
@@ -234,7 +234,7 @@ class _TeacherRequestsScreenState extends State<TeacherRequestsScreen> {
                                         foregroundColor: BeastColors.danger,
                                         side: const BorderSide(color: BeastColors.danger),
                                       ),
-                                      child: const Text('Reject'),
+                                      child: const Text('Deny / Reject'),
                                     ),
                                     const SizedBox(width: BeastSpacing.md),
                                     ElevatedButton(
@@ -243,7 +243,7 @@ class _TeacherRequestsScreenState extends State<TeacherRequestsScreen> {
                                         backgroundColor: BeastColors.brandPrimary,
                                         foregroundColor: Colors.white,
                                       ),
-                                      child: const Text('Recommend Approval'),
+                                      child: const Text('Accept & Recommend'),
                                     ),
                                   ],
                                 ),

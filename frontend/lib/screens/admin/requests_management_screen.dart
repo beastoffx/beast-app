@@ -33,7 +33,7 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
     });
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final isSuperAdmin = auth.user?.role == 'super_admin';
+    final isSuperAdmin = auth.isSuperAdmin || auth.user?.role == 'super_admin' || auth.user?.activeRole == 'super_admin';
 
     String endpoint = ApiConstants.requests;
     if (isSuperAdmin) {
@@ -196,7 +196,7 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
   void _showApproveDialog(Map<String, dynamic> req) {
     final notesController = TextEditingController();
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final isSuperAdmin = auth.user?.role == 'super_admin';
+    final isSuperAdmin = auth.isSuperAdmin || auth.user?.role == 'super_admin' || auth.user?.activeRole == 'super_admin';
     final role = req['requested_role'] as String? ?? 'student';
 
     showDialog(
@@ -259,7 +259,7 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
-    final isSuperAdmin = auth.user?.role == 'super_admin';
+    final isSuperAdmin = auth.isSuperAdmin || auth.user?.role == 'super_admin' || auth.user?.activeRole == 'super_admin';
 
     return Scaffold(
       backgroundColor: BeastColors.surfaceNeutral,
@@ -347,10 +347,11 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
   }
 
   Widget _buildRequestCard(Map<String, dynamic> req, bool isSuperAdmin) {
-    final status = req['status'] as String? ?? '';
-    final role = req['requested_role'] as String? ?? 'student';
-    final canApprove = (isSuperAdmin && (status == 'PENDING_SUPER_ADMIN_REVIEW' || status == 'PENDING_ADMIN_REVIEW')) ||
-        (!isSuperAdmin && status == 'PENDING_ADMIN_REVIEW');
+    final status = (req['status']?.toString() ?? '').trim().toUpperCase();
+    final role = (req['requested_role']?.toString() ?? 'student').trim().toLowerCase();
+    final isPending = status != 'APPROVED' && status != 'REJECTED';
+    // Super Admin can review/accept/deny all pending requests. Admin can review pending student/teacher requests.
+    final canReview = isSuperAdmin ? isPending : (isPending && role != 'admin');
 
     return BeastCard(
       child: Column(
@@ -458,7 +459,7 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
                 icon: const Icon(Icons.delete_outline, size: 20, color: BeastColors.error),
                 tooltip: 'Delete Application Permanently',
               ),
-              if (canApprove)
+              if (canReview)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -468,7 +469,7 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
                         foregroundColor: BeastColors.error,
                         side: const BorderSide(color: BeastColors.error),
                       ),
-                      child: const Text('Reject'),
+                      child: const Text('Deny / Reject'),
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton(
@@ -478,7 +479,7 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
                         foregroundColor: Colors.white,
                       ),
                       child: Text(
-                        isSuperAdmin ? 'Authorize & Activate' : 'Approve & Forward',
+                        isSuperAdmin ? 'Accept & Activate' : 'Accept & Forward',
                       ),
                     ),
                   ],
