@@ -6,7 +6,7 @@ const { get, run, query, transaction } = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 const { logAudit } = require('../middleware/audit');
 const GoogleAuthService = require('../services/googleAuthService');
-const { OtpService } = require('../services/otpService');
+const { EmailService } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -347,7 +347,6 @@ router.post('/google', async (req, res) => {
   }
 });
 
-// POST /api/auth/activate/send-otp
 // ==================== STUDENT IDENTITY VALIDATION & CONFIRMATION ====================
 // POST /api/auth/activate/student
 // Validates official Student ID and returns safe confirmation identity data (no sensitive leaks)
@@ -366,7 +365,7 @@ async function handleValidateStudent(req, res) {
 
     // Verify Student ID in institutional registry
     const studentProfile = get(
-      `SELECT sp.*, u.id as user_id, u.name, u.email, u.phone, u.google_uid, u.status, u.is_active, u.role,
+      `SELECT sp.*, u.id as user_id, u.name, u.email, u.google_uid, u.status, u.is_active, u.role,
               c.name as class_name, b.name as batch_name
        FROM student_profiles sp
        JOIN users u ON sp.user_id = u.id
@@ -397,6 +396,15 @@ async function handleValidateStudent(req, res) {
       });
     }
 
+    // Verify trusted institutional email exists
+    if (!studentProfile.email || !studentProfile.email.trim() || !studentProfile.email.includes('@')) {
+      return res.status(400).json({
+        success: false,
+        error: 'EMAIL_NOT_CONFIGURED',
+        message: 'No registered institutional email address found for this Student ID. Please contact administration.'
+      });
+    }
+
     // Check if student ID is already linked to another Google account
     if (studentProfile.google_uid && (!googleUid || studentProfile.google_uid !== googleUid)) {
       return res.status(409).json({
@@ -416,13 +424,7 @@ async function handleValidateStudent(req, res) {
       }
     }
 
-    // Mask phone for privacy verification: +91 ****** 1111
-    let phoneMasked = null;
-    if (studentProfile.phone && studentProfile.phone.length > 5) {
-      const raw = studentProfile.phone.trim();
-      phoneMasked = raw.slice(0, 3) + ' ****** ' + raw.slice(-4);
-    }
-
+    // Return safe confirmation details with masked email
     return res.json({
       success: true,
       eligible: true,
@@ -430,30 +432,28 @@ async function handleValidateStudent(req, res) {
       name: studentProfile.name,
       className: studentProfile.class_name || 'Enrolled Program',
       batchName: studentProfile.batch_name || 'Assigned Batch',
-      phoneMasked,
-      registeredPhone: studentProfile.phone || null,
-      message: 'Student ID validated. Please confirm mobile number for verification code.'
+      emailMasked: EmailService.maskEmail(studentProfile.email),
+      message: 'Student ID validated. Verification code will be dispatched to your registered institute email.'
     });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
 }
 
-// POST /api/auth/activate/send-otp and /api/auth/phone/send-otp
-// Dispatches verification code via configured OtpService with rate-limiting
-async function handleSendOtp(req, res) {
+// POST /api/auth/email-otp/request and /api/auth/activate/send-otp
+// Dispatches verification code via EmailService to the trusted student email
+async function handleSendEmailOtp(req, res) {
   try {
-    const { googleUid, studentIdNumber, phone } = req.body;
+    const { googleUid, studentIdNumber } = req.body;
 
-    if (!googleUid || !studentIdNumber || !phone) {
+    if (!googleUid || !studentIdNumber) {
       return res.status(400).json({
         success: false,
-        error: 'Google UID, Student ID number, and Mobile Phone are required.'
+        error: 'Google UID and Student ID number are required.'
       });
     }
 
     const cleanStudentId = studentIdNumber.trim().toUpperCase();
-    const cleanPhone = phone.trim();
 
     // Verify Student ID exists and belongs to a student
     const studentProfile = get(
@@ -471,14 +471,6 @@ async function handleSendOtp(req, res) {
       });
     }
 
-    // Check if student ID is already linked to another Google account
-    if (studentProfile.google_uid && studentProfile.google_uid !== googleUid) {
-      return res.status(409).json({
-        success: false,
-        error: 'This Student ID is already linked to another Google account. Please contact institute administration.'
-      });
-    }
-
     // Check account status
     if (!studentProfile.is_active || studentProfile.status === 'suspended' || studentProfile.status === 'archived') {
       return res.status(403).json({
@@ -486,6 +478,23 @@ async function handleSendOtp(req, res) {
         error: studentProfile.status === 'archived'
           ? 'This student account has been archived. Access is disabled.'
           : 'This student account has been suspended. Please contact institute administration.'
+      });
+    }
+
+    // Verify trusted institutional email exists
+    if (!studentProfile.email || !studentProfile.email.trim() || !studentProfile.email.includes('@')) {
+      return res.status(400).json({
+        success: false,
+        error: 'EMAIL_NOT_CONFIGURED',
+        message: 'No registered institutional email address found for this Student ID. Please contact administration.'
+      });
+    }
+
+    // Check if student ID is already linked to another Google account
+    if (studentProfile.google_uid && studentProfile.google_uid !== googleUid) {
+      return res.status(409).json({
+        success: false,
+        error: 'This Student ID is already linked to another Google account. Please contact institute administration.'
       });
     }
 
@@ -500,7 +509,7 @@ async function handleSendOtp(req, res) {
 
     // Rate-limiting: prevent spamming multiple requests within 60 seconds
     const recentOtp = get(
-      `SELECT created_at FROM phone_verifications 
+      `SELECT created_at FROM email_verifications 
        WHERE student_id_number = ? AND created_at > datetime('now', '-60 seconds')
        ORDER BY created_at DESC LIMIT 1`,
       [cleanStudentId]
@@ -512,26 +521,33 @@ async function handleSendOtp(req, res) {
       });
     }
 
-    // Dispatch verification code via OTP provider abstraction
-    const otpResult = await OtpService.initiateVerification({
-      phone: cleanPhone,
+    // Dispatch verification code via EmailService to the trusted student email
+    const otpResult = await EmailService.initiateVerification({
       studentIdNumber: cleanStudentId,
       googleUid
     });
 
     if (!otpResult.success) {
+      if (otpResult.code === 'EMAIL_NOT_CONFIGURED') {
+        return res.status(400).json({
+          success: false,
+          error: 'EMAIL_NOT_CONFIGURED',
+          message: otpResult.error
+        });
+      }
       return res.status(500).json({
         success: false,
         error: otpResult.error || 'Failed to dispatch verification code.'
       });
     }
 
-    logAudit(studentProfile.user_id, 'OTP_DISPATCHED', 'phone_verifications', otpResult.sessionId, { phone: cleanPhone, studentIdNumber: cleanStudentId }, req);
+    logAudit(studentProfile.user_id, 'EMAIL_OTP_DISPATCHED', 'email_verifications', otpResult.sessionId, { studentIdNumber: cleanStudentId }, req);
 
     return res.json({
       success: true,
       sessionId: otpResult.sessionId,
-      message: 'Verification code successfully sent to mobile number.',
+      message: 'Verification code successfully sent to registered institute email.',
+      emailMasked: otpResult.emailMasked,
       expiresAt: otpResult.expiresAt
     });
   } catch (err) {
@@ -539,9 +555,9 @@ async function handleSendOtp(req, res) {
   }
 }
 
-// POST /api/auth/activate/verify and /api/auth/phone/verify-otp
-// Step 2: Validates OTP, atomically links Google UID + Phone, activates account, and returns session
-async function handleVerifyOtp(req, res) {
+// POST /api/auth/email-otp/verify and /api/auth/activate/verify
+// Step 2: Validates Email OTP, atomically links Google UID + Student ID, activates account, and returns session
+async function handleVerifyEmailOtp(req, res) {
   try {
     const { sessionId, otp, googleUid, studentIdNumber } = req.body;
 
@@ -555,7 +571,7 @@ async function handleVerifyOtp(req, res) {
     const cleanStudentId = studentIdNumber.trim().toUpperCase();
 
     // Verify OTP code
-    const verification = OtpService.verifyOtp({
+    const verification = EmailService.verifyOtp({
       sessionId,
       otpCode: otp,
       studentIdNumber: cleanStudentId,
@@ -606,13 +622,13 @@ async function handleVerifyOtp(req, res) {
 
       run(
         `UPDATE users 
-         SET google_uid = ?, phone = ?, phone_verified = 1, status = 'active', is_active = 1, updated_at = datetime('now'), last_login_at = datetime('now')
+         SET google_uid = ?, status = 'active', is_active = 1, updated_at = datetime('now'), last_login_at = datetime('now')
          WHERE id = ?`,
-        [googleUid, verification.phone, studentProfile.user_id]
+        [googleUid, studentProfile.user_id]
       );
     });
 
-    const updatedUser = get('SELECT id, google_uid, email, role, name, phone, phone_verified, status, is_active FROM users WHERE id = ?', [studentProfile.user_id]);
+    const updatedUser = get('SELECT id, google_uid, email, role, name, phone, status, is_active FROM users WHERE id = ?', [studentProfile.user_id]);
     const profile = fetchUserProfile(updatedUser);
 
     const token = jwt.sign(
@@ -621,7 +637,7 @@ async function handleVerifyOtp(req, res) {
       { expiresIn: config.jwtExpiresIn }
     );
 
-    logAudit(updatedUser.id, 'STUDENT_ACTIVATED', 'users', updatedUser.id, { studentIdNumber: cleanStudentId, phone: verification.phone, googleUid }, req);
+    logAudit(updatedUser.id, 'STUDENT_ACTIVATED', 'users', updatedUser.id, { studentIdNumber: cleanStudentId, email: verification.email, googleUid }, req);
 
     return res.json({
       success: true,
@@ -634,7 +650,6 @@ async function handleVerifyOtp(req, res) {
         role: updatedUser.role,
         name: updatedUser.name,
         phone: updatedUser.phone,
-        phone_verified: Boolean(updatedUser.phone_verified),
         status: updatedUser.status
       },
       profile,
@@ -648,16 +663,34 @@ async function handleVerifyOtp(req, res) {
   }
 }
 
-// Router mounts supporting both convention styles
+// Router mounts: Official Email OTP Endpoints
 router.post('/activate/student', (req, res) => {
   if (req.body.otp || req.body.sessionId) {
-    return handleVerifyOtp(req, res);
+    return handleVerifyEmailOtp(req, res);
   }
   return handleValidateStudent(req, res);
 });
-router.post('/activate/send-otp', handleSendOtp);
-router.post('/phone/send-otp', handleSendOtp);
-router.post('/activate/verify', handleVerifyOtp);
-router.post('/phone/verify-otp', handleVerifyOtp);
+
+router.post('/email-otp/request', handleSendEmailOtp);
+router.post('/email-otp/verify', handleVerifyEmailOtp);
+
+// Backward-compatible activation route aliases
+router.post('/activate/send-otp', handleSendEmailOtp);
+router.post('/activate/verify', handleVerifyEmailOtp);
+
+// Explicitly disabled/deprecated phone OTP endpoints
+router.post('/phone/send-otp', (req, res) => {
+  return res.status(410).json({
+    success: false,
+    error: 'Phone OTP verification has been removed. Please use email verification.'
+  });
+});
+
+router.post('/phone/verify-otp', (req, res) => {
+  return res.status(410).json({
+    success: false,
+    error: 'Phone OTP verification has been removed. Please use email verification.'
+  });
+});
 
 module.exports = router;

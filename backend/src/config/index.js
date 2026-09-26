@@ -31,9 +31,14 @@ const config = {
   // Google OAuth Configuration
   googleClientIdWeb: process.env.GOOGLE_CLIENT_ID_WEB || null,
   googleClientIdAndroid: process.env.GOOGLE_CLIENT_ID_ANDROID || 'com.beastacademy.beast_academy',
-  // OTP Provider Configuration
-  otpProvider: process.env.OTP_PROVIDER || 'console',
-  otpTtlMinutes: parseInt(process.env.OTP_TTL_MINUTES || '10', 10)
+  // Email Verification / OTP Provider Configuration
+  emailProvider: (process.env.EMAIL_PROVIDER || 'console').toLowerCase(),
+  emailOtpTtlMinutes: parseInt(process.env.EMAIL_OTP_TTL_MINUTES || '10', 10),
+  smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
+  smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
+  smtpUser: process.env.SMTP_USER || 'beastiankankinara2026@gmail.com',
+  smtpPassword: process.env.SMTP_PASSWORD || null,
+  emailFrom: process.env.EMAIL_FROM || 'B.E.A.S.T. Academy <beastiankankinara2026@gmail.com>'
 };
 
 module.exports = config;

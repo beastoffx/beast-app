@@ -6,7 +6,7 @@ const path = require('path');
 const { createApp } = require('../src/server');
 const { initSchema, query, get, run } = require('../src/db');
 const { seedDatabase } = require('../src/db/seed');
-const { OtpService } = require('../src/services/otpService');
+const { EmailService } = require('../src/services/emailService');
 
 let server;
 let baseUrl;
@@ -20,6 +20,7 @@ test.before(async () => {
 
   // Reset Student 3 state so test suite is 100% deterministic even across re-runs on disk
   run("DELETE FROM phone_verifications WHERE student_id_number = 'BST-2027-00003'");
+  run("DELETE FROM email_verifications WHERE student_id_number = 'BST-2027-00003'");
   const s3User = get("SELECT u.id FROM users u JOIN student_profiles sp ON u.id = sp.user_id WHERE sp.student_id_number = 'BST-2027-00003'");
   if (s3User) {
     run("UPDATE users SET google_uid = NULL, phone = NULL, phone_verified = 0, status = 'pending_activation', is_active = 1 WHERE id = ?", [s3User.id]);
@@ -122,8 +123,7 @@ test('Cloud Auth Migration & Security Test Suite', async (t) => {
       method: 'POST',
       body: {
         googleUid: testGoogleUid,
-        studentIdNumber: 'BST-NON-EXISTENT-999',
-        phone: '+91 98765 33333'
+        studentIdNumber: 'BST-NON-EXISTENT-999'
       }
     });
 
@@ -132,15 +132,14 @@ test('Cloud Auth Migration & Security Test Suite', async (t) => {
     assert.match(res.data.error, /Invalid Student ID/);
   });
 
-  // 4. Phone verification state & OTP dispatch
+  // 4. Email verification state & OTP dispatch
   let activationSessionId = '';
-  await t.test('4. Phone Verification State & OTP Dispatch', async () => {
+  await t.test('4. Email Verification State & OTP Dispatch', async () => {
     const res = await api('/api/auth/activate/send-otp', {
       method: 'POST',
       body: {
         googleUid: testGoogleUid,
-        studentIdNumber: 'BST-2027-00003',
-        phone: '+91 98765 33333'
+        studentIdNumber: 'BST-2027-00003'
       }
     });
 
@@ -149,10 +148,10 @@ test('Cloud Auth Migration & Security Test Suite', async (t) => {
     assert.ok(res.data.sessionId);
     activationSessionId = res.data.sessionId;
 
-    // Verify record in phone_verifications table
-    const record = get('SELECT * FROM phone_verifications WHERE session_id = ?', [activationSessionId]);
+    // Verify record in email_verifications table
+    const record = get('SELECT * FROM email_verifications WHERE session_id = ?', [activationSessionId]);
     assert.ok(record);
-    assert.equal(record.phone, '+91 98765 33333');
+    assert.equal(record.email, 'rohan.verma@beastacademy.edu');
     assert.equal(record.student_id_number, 'BST-2027-00003');
     assert.equal(record.is_verified, 0);
   });
@@ -176,9 +175,9 @@ test('Cloud Auth Migration & Security Test Suite', async (t) => {
 
   // 6. Successful verification, linking, and activation
   let activatedStudentToken = '';
-  await t.test('6. Student Activation: Atomically links Google UID + Phone', async () => {
+  await t.test('6. Student Activation: Atomically links Google UID + Email', async () => {
     // Retrieve the cryptographically generated OTP from the test provider
-    const otpCode = OtpService.getActiveProvider().getTestOtp('+91 98765 33333');
+    const otpCode = EmailService.getActiveProvider().getTestOtp('rohan.verma@beastacademy.edu');
     assert.ok(otpCode, 'OTP code should be generated in test provider');
 
     const res = await api('/api/auth/activate/verify', {
@@ -197,15 +196,13 @@ test('Cloud Auth Migration & Security Test Suite', async (t) => {
     assert.ok(res.data.token);
     activatedStudentToken = res.data.token;
     assert.equal(res.data.user.google_uid, testGoogleUid);
-    assert.equal(res.data.user.phone, '+91 98765 33333');
-    assert.equal(res.data.user.phone_verified, true);
+    assert.equal(res.data.user.email, 'rohan.verma@beastacademy.edu');
     assert.equal(res.data.user.status, 'active');
 
     // Verify database state directly
     const userInDb = get('SELECT * FROM users WHERE google_uid = ?', [testGoogleUid]);
     assert.ok(userInDb);
     assert.equal(userInDb.status, 'active');
-    assert.equal(userInDb.phone_verified, 1);
   });
 
   // 7. New-device login behavior: already-linked Google account returns LINKED
@@ -231,8 +228,7 @@ test('Cloud Auth Migration & Security Test Suite', async (t) => {
       method: 'POST',
       body: {
         googleUid: anotherGoogleUid,
-        studentIdNumber: 'BST-2027-00003', // already linked to testGoogleUid!
-        phone: '+91 98765 99999'
+        studentIdNumber: 'BST-2027-00003' // already linked to testGoogleUid!
       }
     });
 

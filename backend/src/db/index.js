@@ -123,6 +123,25 @@ function runMigrations(db) {
       db.exec("UPDATE admin_profiles SET admin_id_number = 'ADM-2027-00001' WHERE admin_id_number IS NULL OR admin_id_number = '';");
     }
   } catch (_) {}
+
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS email_verifications (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        otp_hash TEXT NOT NULL,
+        session_id TEXT UNIQUE NOT NULL,
+        student_id_number TEXT NOT NULL,
+        google_uid TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        is_verified INTEGER NOT NULL DEFAULT 0,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_email_verifications_session ON email_verifications(session_id);
+      CREATE INDEX IF NOT EXISTS idx_email_verifications_email ON email_verifications(email);
+    `);
+  } catch (_) {}
 }
 
 function initSchema(db = null) {

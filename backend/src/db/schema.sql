@@ -419,3 +419,20 @@ CREATE TABLE IF NOT EXISTS phone_verifications (
 
 CREATE INDEX IF NOT EXISTS idx_phone_verifications_session ON phone_verifications(session_id);
 CREATE INDEX IF NOT EXISTS idx_phone_verifications_phone ON phone_verifications(phone);
+
+-- 26. Email Verifications (OTP Lifecycle)
+CREATE TABLE IF NOT EXISTS email_verifications (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    otp_hash TEXT NOT NULL,
+    session_id TEXT UNIQUE NOT NULL,
+    student_id_number TEXT NOT NULL,
+    google_uid TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    is_verified INTEGER NOT NULL DEFAULT 0,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_verifications_session ON email_verifications(session_id);
+CREATE INDEX IF NOT EXISTS idx_email_verifications_email ON email_verifications(email);

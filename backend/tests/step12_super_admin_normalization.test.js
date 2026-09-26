@@ -11,7 +11,7 @@ const jwt = require('jsonwebtoken');
 const { createApp } = require('../src/server');
 const { initSchema, query, get, run, transaction } = require('../src/db');
 const { seedDatabase } = require('../src/db/seed');
-const { OtpService } = require('../src/services/otpService');
+const { EmailService } = require('../src/services/emailService');
 
 let server;
 let baseUrl;
@@ -378,6 +378,7 @@ test('BEAST Academy — Section 10: Super Admin Normalization & Security Suite',
   await t.test('15. Student activation still works', async () => {
     // Clean up any previous test runs
     run('DELETE FROM phone_verifications WHERE student_id_number = ?', [TEST15_STUDENT_ID]);
+    run('DELETE FROM email_verifications WHERE student_id_number = ?', [TEST15_STUDENT_ID]);
     run('DELETE FROM enrollments WHERE student_id = ?', [TEST15_STUDENT_USER_ID]);
     run('DELETE FROM student_profiles WHERE student_id_number = ?', [TEST15_STUDENT_ID]);
     run('DELETE FROM users WHERE id = ?', [TEST15_STUDENT_USER_ID]);
@@ -408,8 +409,7 @@ test('BEAST Academy — Section 10: Super Admin Normalization & Security Suite',
       method: 'POST',
       body: {
         googleUid: TEST15_GOOGLE_UID,
-        studentIdNumber: TEST15_STUDENT_ID,
-        phone: TEST15_STUDENT_PHONE
+        studentIdNumber: TEST15_STUDENT_ID
       }
     });
     assert.equal(otpRes.status, 200);
@@ -417,7 +417,7 @@ test('BEAST Academy — Section 10: Super Admin Normalization & Security Suite',
     assert.ok(otpRes.data.sessionId);
 
     // Retrieve active OTP code from dev console provider
-    const correctOtp = OtpService.getActiveProvider().getTestOtp(TEST15_STUDENT_PHONE);
+    const correctOtp = EmailService.getActiveProvider().getTestOtp(TEST15_STUDENT_EMAIL);
     assert.ok(correctOtp, 'Active OTP must exist in test mode');
 
     // 3. Verify OTP and complete activation
@@ -437,9 +437,8 @@ test('BEAST Academy — Section 10: Super Admin Normalization & Security Suite',
     assert.ok(linkRes.data.token);
 
     // Verify DB user is active and linked
-    const user = get('SELECT status, phone_verified, google_uid FROM users WHERE id = ?', [TEST15_STUDENT_USER_ID]);
+    const user = get('SELECT status, google_uid FROM users WHERE id = ?', [TEST15_STUDENT_USER_ID]);
     assert.equal(user.status, 'active');
-    assert.equal(user.phone_verified, 1);
     assert.equal(user.google_uid, TEST15_GOOGLE_UID);
   });
 
@@ -465,6 +464,7 @@ test('BEAST Academy — Section 10: Super Admin Normalization & Security Suite',
     const DUP_ID = 'BST-2027-00017';
     const DUP_UID = 'user-stu-test17';
     run('DELETE FROM phone_verifications WHERE student_id_number = ?', [DUP_ID]);
+    run('DELETE FROM email_verifications WHERE student_id_number = ?', [DUP_ID]);
     run('DELETE FROM student_profiles WHERE student_id_number = ?', [DUP_ID]);
     run('DELETE FROM users WHERE id = ?', [DUP_UID]);
 
@@ -484,8 +484,7 @@ test('BEAST Academy — Section 10: Super Admin Normalization & Security Suite',
       method: 'POST',
       body: {
         googleUid: TEST15_GOOGLE_UID,
-        studentIdNumber: DUP_ID,
-        phone: '+91 98765 88888'
+        studentIdNumber: DUP_ID
       }
     });
 
@@ -500,8 +499,7 @@ test('BEAST Academy — Section 10: Super Admin Normalization & Security Suite',
       method: 'POST',
       body: {
         googleUid: 'google-uid-new-different-999',
-        studentIdNumber: TEST15_STUDENT_ID,
-        phone: '+91 98765 77777'
+        studentIdNumber: TEST15_STUDENT_ID
       }
     });
     assert.equal(res.status, 409);

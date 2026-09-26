@@ -30,8 +30,10 @@ class ApiConstants {
   static const String login = '/api/auth/login';
   static const String authGoogle = '/api/auth/google';
   static const String activateStudent = '/api/auth/activate/student';
-  static const String sendOtp = '/api/auth/activate/send-otp';
-  static const String verifyOtp = '/api/auth/activate/verify';
+  static const String sendEmailOtp = '/api/auth/email-otp/request';
+  static const String verifyEmailOtp = '/api/auth/email-otp/verify';
+  static const String sendOtp = '/api/auth/email-otp/request';
+  static const String verifyOtp = '/api/auth/email-otp/verify';
   static const String me = '/api/auth/me';
   static const String changePassword = '/api/auth/change-password';
   static const String recoverRequest = '/api/auth/recover-request';

@@ -263,25 +263,24 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  /// Step 2 of Activation: Dispatch phone OTP
-  Future<String?> sendActivationOtp(String studentIdNumber, String phone) async {
+  /// Step 2 of Activation: Dispatch Email OTP to registered institute email
+  Future<Map<String, dynamic>?> sendActivationOtp(String studentIdNumber) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
-    final response = await _api.post(ApiConstants.sendOtp, {
+    final response = await _api.post(ApiConstants.sendEmailOtp, {
       'googleUid': _pendingGoogleUid,
       'studentIdNumber': studentIdNumber.trim().toUpperCase(),
-      'phone': phone.trim(),
     });
 
     _isLoading = false;
 
     if (response.success && response.data != null) {
       notifyListeners();
-      return response.data['sessionId'];
+      return response.data;
     } else {
-      _errorMessage = response.error ?? 'Failed to send verification code.';
+      _errorMessage = response.error ?? 'Failed to send verification code to registered email.';
       notifyListeners();
       return null;
     }

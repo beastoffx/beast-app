@@ -13,11 +13,10 @@ class StudentActivationScreen extends StatefulWidget {
 }
 
 class _StudentActivationScreenState extends State<StudentActivationScreen> {
-  // Step tracking: 1 = Google Verified prompt, 2 = Enter Student ID, 3 = Confirm Identity & Enter Phone, 4 = Enter OTP, 5 = Activated
+  // Step tracking: 1 = Google Verified prompt, 2 = Enter Student ID, 3 = Confirm Identity & Email, 4 = Enter Email OTP, 5 = Activated
   int _currentStep = 1;
 
   final TextEditingController _studentIdController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
 
   Map<String, dynamic>? _studentData;
@@ -29,7 +28,6 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
   @override
   void dispose() {
     _studentIdController.dispose();
-    _phoneController.dispose();
     _otpController.dispose();
     _resendTimer?.cancel();
     super.dispose();
@@ -67,9 +65,6 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
     if (data != null && mounted) {
       setState(() {
         _studentData = data;
-        if (data['registeredPhone'] != null) {
-          _phoneController.text = data['registeredPhone'];
-        }
         _currentStep = 3;
       });
     } else if (mounted) {
@@ -82,28 +77,23 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
     }
   }
 
-  // Action 2: Request OTP
+  // Action 2: Request Email OTP
   Future<void> _handleRequestOtp() async {
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid mobile number for OTP.')),
-      );
-      return;
-    }
-
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    final sid = await auth.sendActivationOtp(_studentIdController.text.trim(), phone);
+    final res = await auth.sendActivationOtp(_studentIdController.text.trim());
 
-    if (sid != null && mounted) {
+    if (res != null && mounted) {
       setState(() {
-        _sessionId = sid;
+        _sessionId = res['sessionId'];
+        if (res['emailMasked'] != null && _studentData != null) {
+          _studentData!['emailMasked'] = res['emailMasked'];
+        }
         _currentStep = 4;
       });
       _startResendTimer();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Verification code dispatched to mobile phone.'),
+          content: Text('Verification code sent to your registered institute email.'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -117,7 +107,7 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
     }
   }
 
-  // Action 3: Verify OTP and Activate
+  // Action 3: Verify Email OTP and Activate
   Future<void> _handleVerifyAndActivate() async {
     final otp = _otpController.text.trim();
     if (otp.length < 6) {
@@ -253,10 +243,10 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
                     ),
                   ],
 
-                  // STEP 3: Confirm Identity & Enter Phone
+                  // STEP 3: Confirm Identity & Request Email Verification
                   if (_currentStep == 3 && _studentData != null) ...[
                     const Text(
-                      'Confirm Identity & Phone',
+                      'Confirm Identity & Email',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 12),
@@ -292,13 +282,13 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
                               Text('${_studentData!['className']} (${_studentData!['batchName']})', style: const TextStyle(fontWeight: FontWeight.bold)),
                             ],
                           ),
-                          if (_studentData!['phoneMasked'] != null) ...[
+                          if (_studentData!['emailMasked'] != null) ...[
                             const SizedBox(height: 6),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Registered Phone:', style: TextStyle(fontSize: 13, color: Colors.grey)),
-                                Text(_studentData!['phoneMasked'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                                const Text('Registered Email:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                                Text(_studentData!['emailMasked'], style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey)),
                               ],
                             ),
                           ],
@@ -306,38 +296,49 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    TextField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'Mobile Phone for Verification',
-                        hintText: '+91 98765 11111',
-                        prefixIcon: Icon(Icons.phone),
-                        border: OutlineInputBorder(),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.mail_outline, color: Colors.blue.shade700, size: 22),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'A 6-digit verification code will be sent to ${_studentData!['emailMasked'] ?? 'your registered institute email'}.',
+                              style: TextStyle(fontSize: 12, color: Colors.blue.shade900),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 20),
-                    ElevatedButton(
+                    ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      onPressed: auth.isLoading ? null : _handleRequestOtp,
-                      child: auth.isLoading
+                      icon: const Icon(Icons.send, color: Colors.white, size: 18),
+                      label: auth.isLoading
                           ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Text('Send Verification OTP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          : const Text('Send Verification Code to Email', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      onPressed: auth.isLoading ? null : _handleRequestOtp,
                     ),
                   ],
 
-                  // STEP 4: Enter OTP
+                  // STEP 4: Enter Email OTP
                   if (_currentStep == 4) ...[
                     const Text(
-                      'Enter Verification Code',
+                      'Enter Email Verification Code',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'A 6-digit verification code has been dispatched to ${_phoneController.text.trim()}.',
+                      'A 6-digit verification code has been sent to ${_studentData?['emailMasked'] ?? 'your registered institute email'}.',
                       style: const TextStyle(fontSize: 13, color: Colors.black54),
                     ),
                     const SizedBox(height: 20),
@@ -429,7 +430,7 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
         _buildStepLine(1),
         _buildStepDot(2, 'ID'),
         _buildStepLine(2),
-        _buildStepDot(3, 'Phone'),
+        _buildStepDot(3, 'Email'),
         _buildStepLine(3),
         _buildStepDot(4, 'OTP'),
         _buildStepLine(4),
@@ -448,20 +449,32 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
 
     return Column(
       children: [
-        CircleAvatar(
-          radius: 12,
-          backgroundColor: color,
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
           child: isDone
-              ? const Icon(Icons.check, size: 12, color: Colors.white)
-              : Text('$step', style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+              ? const Icon(Icons.check, size: 16, color: Colors.white)
+              : Text(
+                  '$step',
+                  style: TextStyle(
+                    color: isCurrent ? Colors.white : Colors.black54,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
         ),
         const SizedBox(height: 4),
         Text(
           label,
           style: TextStyle(
-            fontSize: 9,
+            fontSize: 11,
             fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-            color: isCurrent ? AppColors.primary : Colors.grey.shade600,
+            color: isCurrent ? AppColors.primary : Colors.black54,
           ),
         ),
       ],
@@ -470,11 +483,12 @@ class _StudentActivationScreenState extends State<StudentActivationScreen> {
 
   Widget _buildStepLine(int afterStep) {
     final isDone = _currentStep > afterStep;
-    return Container(
-      width: 24,
-      height: 2,
-      margin: const EdgeInsets.only(bottom: 14, left: 2, right: 2),
-      color: isDone ? Colors.green : Colors.grey.shade300,
+    return Expanded(
+      child: Container(
+        height: 2,
+        margin: const EdgeInsets.only(bottom: 16, left: 4, right: 4),
+        color: isDone ? Colors.green : Colors.grey.shade300,
+      ),
     );
   }
 }

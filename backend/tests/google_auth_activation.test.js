@@ -8,7 +8,7 @@ const http = require('node:http');
 const { createApp } = require('../src/server');
 const { initSchema, query, get, run, transaction } = require('../src/db');
 const { seedDatabase } = require('../src/db/seed');
-const { OtpService } = require('../src/services/otpService');
+const { EmailService } = require('../src/services/emailService');
 
 let server;
 let baseUrl;
@@ -27,6 +27,9 @@ const DUP_STUDENT_EMAIL = 'aditi.dup@beastacademy.edu';
 const DUP_STUDENT_PHONE = '+91 98765 55555';
 const DUP_STUDENT_NAME = 'Aditi Rao';
 
+const NO_EMAIL_STUDENT_USER_ID = 'user-stu-no-email-12';
+const NO_EMAIL_STUDENT_ID = 'BST-2027-00014';
+
 const TEST_ADMIN_USER_ID = 'user-adm-step12';
 const TEST_ADMIN_EMAIL = 'neha.admin@beastacademy.edu';
 const TEST_ADMIN_GOOGLE_UID = 'google-uid-neha-step12';
@@ -42,14 +45,16 @@ test.before(async () => {
   seedDatabase();
 
   // Reset test artifacts unconditionally for idempotency across repeated test runs
-  run('DELETE FROM phone_verifications WHERE student_id_number IN (?, ?)', [TEST_STUDENT_ID, DUP_STUDENT_ID]);
+  run('DELETE FROM email_verifications WHERE student_id_number IN (?, ?, ?)', [TEST_STUDENT_ID, DUP_STUDENT_ID, NO_EMAIL_STUDENT_ID]);
+  run('DELETE FROM email_verifications WHERE email IN (?, ?)', [TEST_STUDENT_EMAIL, DUP_STUDENT_EMAIL]);
+  run('DELETE FROM phone_verifications WHERE student_id_number IN (?, ?, ?)', [TEST_STUDENT_ID, DUP_STUDENT_ID, NO_EMAIL_STUDENT_ID]);
   run('DELETE FROM phone_verifications WHERE phone IN (?, ?)', [TEST_STUDENT_PHONE, DUP_STUDENT_PHONE]);
-  run('DELETE FROM enrollments WHERE student_id IN (?, ?)', [TEST_STUDENT_USER_ID, DUP_STUDENT_USER_ID]);
-  run('DELETE FROM student_profiles WHERE student_id_number IN (?, ?)', [TEST_STUDENT_ID, DUP_STUDENT_ID]);
-  run('DELETE FROM student_profiles WHERE user_id IN (?, ?)', [TEST_STUDENT_USER_ID, DUP_STUDENT_USER_ID]);
+  run('DELETE FROM enrollments WHERE student_id IN (?, ?, ?)', [TEST_STUDENT_USER_ID, DUP_STUDENT_USER_ID, NO_EMAIL_STUDENT_USER_ID]);
+  run('DELETE FROM student_profiles WHERE student_id_number IN (?, ?, ?)', [TEST_STUDENT_ID, DUP_STUDENT_ID, NO_EMAIL_STUDENT_ID]);
+  run('DELETE FROM student_profiles WHERE user_id IN (?, ?, ?)', [TEST_STUDENT_USER_ID, DUP_STUDENT_USER_ID, NO_EMAIL_STUDENT_USER_ID]);
   run('DELETE FROM admin_profiles WHERE user_id = ?', [TEST_ADMIN_USER_ID]);
-  run('DELETE FROM audit_logs WHERE user_id IN (?, ?, ?)', [TEST_STUDENT_USER_ID, DUP_STUDENT_USER_ID, TEST_ADMIN_USER_ID]);
-  run('DELETE FROM users WHERE id IN (?, ?, ?)', [TEST_STUDENT_USER_ID, DUP_STUDENT_USER_ID, TEST_ADMIN_USER_ID]);
+  run('DELETE FROM audit_logs WHERE user_id IN (?, ?, ?, ?)', [TEST_STUDENT_USER_ID, DUP_STUDENT_USER_ID, NO_EMAIL_STUDENT_USER_ID, TEST_ADMIN_USER_ID]);
+  run('DELETE FROM users WHERE id IN (?, ?, ?, ?)', [TEST_STUDENT_USER_ID, DUP_STUDENT_USER_ID, NO_EMAIL_STUDENT_USER_ID, TEST_ADMIN_USER_ID]);
   run('DELETE FROM users WHERE email IN (?, ?, ?)', [TEST_STUDENT_EMAIL, DUP_STUDENT_EMAIL, TEST_ADMIN_EMAIL]);
 
   // Reset Super Admin Google UID for Google account resolution test
@@ -71,6 +76,19 @@ test.before(async () => {
     `INSERT INTO enrollments (id, student_id, batch_id, academic_session_id, status)
      VALUES ('enr-step12', ?, 'batch-pcm-2027-a', 'session-2026-2027', 'active')`,
     [TEST_STUDENT_USER_ID]
+  );
+
+  // Insert pre-provisioned unactivated test student without email for EMAIL_NOT_CONFIGURED check
+  run(
+    `INSERT INTO users (id, email, password_hash, role, name, status, is_active)
+     VALUES (?, '', 'HASH_NO_EMAIL', 'student', 'No Email Student', 'pending_activation', 1)`,
+    [NO_EMAIL_STUDENT_USER_ID]
+  );
+  run(
+    `INSERT INTO student_profiles 
+     (id, user_id, student_id_number, class_id, batch_id, academic_session_id, subscription_status)
+     VALUES ('stu-prof-no-email-12', ?, ?, 'class-12-sci', 'batch-pcm-2027-a', 'session-2026-2027', 'paid')`,
+    [NO_EMAIL_STUDENT_USER_ID, NO_EMAIL_STUDENT_ID]
   );
 
   // Insert pre-provisioned unactivated test student 2 (Aditi Rao) for duplicate checks
@@ -179,8 +197,8 @@ test('BEAST Academy — Step 12: Real Google Sign-In & Student Activation Matrix
     assert.ok(res.data.message.includes('not yet linked'));
   });
 
-  // 3. Student ID validation returns safe identity info
-  await t.test('3. Student ID validation returns safe identity info', async () => {
+  // 3. Student ID validation returns safe identity info with masked email
+  await t.test('3. Student ID validation returns safe identity info with masked email', async () => {
     const res = await api('/api/auth/activate/student', {
       method: 'POST',
       body: { studentIdNumber: TEST_STUDENT_ID }
@@ -192,12 +210,24 @@ test('BEAST Academy — Step 12: Real Google Sign-In & Student Activation Matrix
     assert.equal(res.data.name, TEST_STUDENT_NAME);
     assert.equal(res.data.className, 'Class 12');
     assert.equal(res.data.batchName, 'PCM-2027-A');
-    assert.equal(res.data.phoneMasked, '+91 ****** 4444');
+    assert.ok(res.data.emailMasked);
+    assert.equal(res.data.emailMasked, EmailService.maskEmail(TEST_STUDENT_EMAIL));
 
     // Crucial security check: sensitive secrets, password hash, internal tokens must NEVER leak
     assert.equal(res.data.password_hash, undefined);
     assert.equal(res.data.emergency_contact, undefined);
     assert.equal(res.data.token, undefined);
+  });
+
+  // 3b. Student without registered email returns 400 EMAIL_NOT_CONFIGURED
+  await t.test('3b. Student without registered email returns 400 EMAIL_NOT_CONFIGURED', async () => {
+    const res = await api('/api/auth/activate/student', {
+      method: 'POST',
+      body: { studentIdNumber: NO_EMAIL_STUDENT_ID }
+    });
+    assert.equal(res.status, 400);
+    assert.equal(res.data.success, false);
+    assert.equal(res.data.error, 'EMAIL_NOT_CONFIGURED');
   });
 
   // 4. Invalid Student ID returns 404
@@ -231,26 +261,43 @@ test('BEAST Academy — Step 12: Real Google Sign-In & Student Activation Matrix
     run("UPDATE users SET google_uid = NULL WHERE id = 'user-student-01'");
   });
 
-  // 6. Phone OTP generation with SHA-256 hash in database
-  await t.test('6. Phone OTP generation with SHA-256 hash in database', async () => {
-    const res = await api('/api/auth/activate/send-otp', {
+  // 5b. Client cannot supply or override destination email in OTP request
+  await t.test('5b. Client cannot supply or override destination email in OTP request', async () => {
+    const res = await api('/api/auth/email-otp/request', {
       method: 'POST',
       body: {
         googleUid: TEST_STUDENT_GOOGLE_UID,
         studentIdNumber: TEST_STUDENT_ID,
-        phone: TEST_STUDENT_PHONE
+        email: 'attacker@evil.com' // Client attempting to override email
+      }
+    });
+    assert.equal(res.status, 200);
+    // Verified: OTP was dispatched to trusted student email from DB, NOT attacker's email
+    const record = get('SELECT email FROM email_verifications WHERE session_id = ?', [res.data.sessionId]);
+    assert.equal(record.email, TEST_STUDENT_EMAIL);
+    assert.notEqual(record.email, 'attacker@evil.com');
+  });
+
+  // 6. Email OTP generation with SHA-256 hash in database
+  await t.test('6. Email OTP generation with SHA-256 hash in database', async () => {
+    const res = await api('/api/auth/email-otp/request', {
+      method: 'POST',
+      body: {
+        googleUid: TEST_STUDENT_GOOGLE_UID,
+        studentIdNumber: TEST_STUDENT_ID
       }
     });
     assert.equal(res.status, 200);
     assert.equal(res.data.success, true);
     assert.ok(res.data.sessionId);
     assert.ok(res.data.expiresAt);
+    assert.ok(res.data.emailMasked);
     activationSessionId = res.data.sessionId;
 
     // Verify database record
-    const record = get('SELECT * FROM phone_verifications WHERE session_id = ?', [activationSessionId]);
-    assert.ok(record, 'Verification record must exist in phone_verifications');
-    assert.equal(record.phone, TEST_STUDENT_PHONE);
+    const record = get('SELECT * FROM email_verifications WHERE session_id = ?', [activationSessionId]);
+    assert.ok(record, 'Verification record must exist in email_verifications');
+    assert.equal(record.email, TEST_STUDENT_EMAIL);
     assert.equal(record.student_id_number, TEST_STUDENT_ID);
     assert.equal(record.google_uid, TEST_STUDENT_GOOGLE_UID);
     assert.equal(record.is_verified, 0);
@@ -264,9 +311,9 @@ test('BEAST Academy — Step 12: Real Google Sign-In & Student Activation Matrix
     assert.equal(record.otp_code, undefined);
   });
 
-  // 7. Incorrect OTP rejected with 400
+  // 7. Incorrect OTP rejected with 400 and attempts incremented
   await t.test('7. Incorrect OTP rejected with 400', async () => {
-    const res = await api('/api/auth/activate/verify', {
+    const res = await api('/api/auth/email-otp/verify', {
       method: 'POST',
       body: {
         sessionId: activationSessionId,
@@ -280,19 +327,55 @@ test('BEAST Academy — Step 12: Real Google Sign-In & Student Activation Matrix
     assert.match(res.data.error, /Incorrect verification code/i);
 
     // Verify attempts incremented in database
-    const record = get('SELECT attempts FROM phone_verifications WHERE session_id = ?', [activationSessionId]);
+    const record = get('SELECT attempts FROM email_verifications WHERE session_id = ?', [activationSessionId]);
     assert.equal(record.attempts, 1);
+  });
+
+  // 7b. Max 5 attempts lockout enforces session invalidation
+  await t.test('7b. Max 5 attempts lockout enforces session invalidation', async () => {
+    for (let i = 2; i <= 5; i++) {
+      await api('/api/auth/email-otp/verify', {
+        method: 'POST',
+        body: {
+          sessionId: activationSessionId,
+          otp: '000000',
+          googleUid: TEST_STUDENT_GOOGLE_UID,
+          studentIdNumber: TEST_STUDENT_ID
+        }
+      });
+    }
+    // 6th attempt must be rejected for exceeding max attempts
+    const lockedRes = await api('/api/auth/email-otp/verify', {
+      method: 'POST',
+      body: {
+        sessionId: activationSessionId,
+        otp: '000000',
+        googleUid: TEST_STUDENT_GOOGLE_UID,
+        studentIdNumber: TEST_STUDENT_ID
+      }
+    });
+    assert.equal(lockedRes.status, 400);
+    assert.match(lockedRes.data.error, /Maximum verification attempts exceeded/i);
   });
 
   // 8. Expired OTP rejected with 400
   await t.test('8. Expired OTP rejected with 400', async () => {
-    // Manually expire the session in the database
-    run("UPDATE phone_verifications SET expires_at = datetime('now', '-5 minutes') WHERE session_id = ?", [activationSessionId]);
-
-    const res = await api('/api/auth/activate/verify', {
+    const freshRes = await api('/api/auth/email-otp/request', {
       method: 'POST',
       body: {
-        sessionId: activationSessionId,
+        googleUid: TEST_STUDENT_GOOGLE_UID,
+        studentIdNumber: TEST_STUDENT_ID
+      }
+    });
+    const expSessionId = freshRes.data.sessionId;
+
+    // Manually expire the session in the database
+    run("UPDATE email_verifications SET expires_at = datetime('now', '-5 minutes') WHERE session_id = ?", [expSessionId]);
+
+    const res = await api('/api/auth/email-otp/verify', {
+      method: 'POST',
+      body: {
+        sessionId: expSessionId,
         otp: '123456',
         googleUid: TEST_STUDENT_GOOGLE_UID,
         studentIdNumber: TEST_STUDENT_ID
@@ -303,28 +386,27 @@ test('BEAST Academy — Step 12: Real Google Sign-In & Student Activation Matrix
     assert.match(res.data.error, /expired/i);
   });
 
-  // 9. Successful activation links Google UID + Student ID + Phone
-  await t.test('9. Successful activation links Google UID + Student ID + Phone', async () => {
-    // Clear previous phone verifications for clean test isolation
-    run('DELETE FROM phone_verifications WHERE student_id_number = ?', [TEST_STUDENT_ID]);
+  // 9. Successful activation links Google UID + Student ID + Email
+  await t.test('9. Successful activation links Google UID + Student ID + Email', async () => {
+    // Clear previous email verifications for clean test isolation
+    run('DELETE FROM email_verifications WHERE student_id_number = ?', [TEST_STUDENT_ID]);
 
     // Request fresh valid OTP
-    const otpRes = await api('/api/auth/activate/send-otp', {
+    const otpRes = await api('/api/auth/email-otp/request', {
       method: 'POST',
       body: {
         googleUid: TEST_STUDENT_GOOGLE_UID,
-        studentIdNumber: TEST_STUDENT_ID,
-        phone: TEST_STUDENT_PHONE
+        studentIdNumber: TEST_STUDENT_ID
       }
     });
     assert.equal(otpRes.status, 200);
     const validSessionId = otpRes.data.sessionId;
 
     // Retrieve generated OTP from test provider
-    const correctOtp = OtpService.getActiveProvider().getTestOtp(TEST_STUDENT_PHONE);
-    assert.ok(correctOtp, 'Test OTP must be retrievable from dev console provider');
+    const correctOtp = EmailService.getActiveProvider().getTestOtp(TEST_STUDENT_EMAIL);
+    assert.ok(correctOtp, 'Test OTP must be retrievable from dev console email provider');
 
-    const res = await api('/api/auth/activate/verify', {
+    const res = await api('/api/auth/email-otp/verify', {
       method: 'POST',
       body: {
         sessionId: validSessionId,
@@ -341,18 +423,29 @@ test('BEAST Academy — Step 12: Real Google Sign-In & Student Activation Matrix
     activatedStudentToken = res.data.token;
 
     assert.equal(res.data.user.google_uid, TEST_STUDENT_GOOGLE_UID);
-    assert.equal(res.data.user.phone, TEST_STUDENT_PHONE);
-    assert.equal(res.data.user.phone_verified, true);
+    assert.equal(res.data.user.email, TEST_STUDENT_EMAIL);
     assert.equal(res.data.user.status, 'active');
+
+    // Single-use and replay prevention: re-submitting same session must be rejected
+    const reuseRes = await api('/api/auth/email-otp/verify', {
+      method: 'POST',
+      body: {
+        sessionId: validSessionId,
+        otp: correctOtp,
+        googleUid: TEST_STUDENT_GOOGLE_UID,
+        studentIdNumber: TEST_STUDENT_ID
+      }
+    });
+    assert.equal(reuseRes.status, 400);
+    assert.match(reuseRes.data.error, /already been used/i);
   });
 
   // 10. Atomically links Google UID and activates student
   await t.test('10. Atomically links Google UID and activates student', async () => {
-    const updatedUser = get('SELECT id, google_uid, phone, phone_verified, status, is_active FROM users WHERE id = ?', [TEST_STUDENT_USER_ID]);
+    const updatedUser = get('SELECT id, google_uid, email, status, is_active FROM users WHERE id = ?', [TEST_STUDENT_USER_ID]);
     assert.ok(updatedUser);
     assert.equal(updatedUser.google_uid, TEST_STUDENT_GOOGLE_UID);
-    assert.equal(updatedUser.phone, TEST_STUDENT_PHONE);
-    assert.equal(updatedUser.phone_verified, 1);
+    assert.equal(updatedUser.email, TEST_STUDENT_EMAIL);
     assert.equal(updatedUser.status, 'active');
     assert.equal(updatedUser.is_active, 1);
 
@@ -364,12 +457,11 @@ test('BEAST Academy — Step 12: Real Google Sign-In & Student Activation Matrix
   // 11. Duplicate Google UID prevention on activation
   await t.test('11. Duplicate Google UID prevention on activation', async () => {
     // Attempt to send OTP for Aditi Rao using Kabir's already-linked Google UID
-    const res = await api('/api/auth/activate/send-otp', {
+    const res = await api('/api/auth/email-otp/request', {
       method: 'POST',
       body: {
         googleUid: TEST_STUDENT_GOOGLE_UID, // already linked to Kabir Singhania
-        studentIdNumber: DUP_STUDENT_ID,
-        phone: DUP_STUDENT_PHONE
+        studentIdNumber: DUP_STUDENT_ID
       }
     });
     assert.equal(res.status, 409);
@@ -379,16 +471,15 @@ test('BEAST Academy — Step 12: Real Google Sign-In & Student Activation Matrix
 
   // 12. Duplicate Student ID activation prevention
   await t.test('12. Duplicate Student ID activation prevention', async () => {
-    // Clear previous phone verifications for clean test isolation
-    run('DELETE FROM phone_verifications WHERE student_id_number = ?', [TEST_STUDENT_ID]);
+    // Clear previous email verifications for clean test isolation
+    run('DELETE FROM email_verifications WHERE student_id_number = ?', [TEST_STUDENT_ID]);
 
     // Attempt to activate Kabir's Student ID with a different Google account
-    const res = await api('/api/auth/activate/send-otp', {
+    const res = await api('/api/auth/email-otp/request', {
       method: 'POST',
       body: {
         googleUid: 'google-uid-brand-new-999',
-        studentIdNumber: TEST_STUDENT_ID, // already activated and linked
-        phone: TEST_STUDENT_PHONE
+        studentIdNumber: TEST_STUDENT_ID // already activated and linked
       }
     });
     assert.equal(res.status, 409);
@@ -414,7 +505,7 @@ test('BEAST Academy — Step 12: Real Google Sign-In & Student Activation Matrix
     returningSessionToken = res.data.token;
     assert.equal(res.data.user.id, TEST_STUDENT_USER_ID);
     assert.equal(res.data.user.google_uid, TEST_STUDENT_GOOGLE_UID);
-    assert.equal(res.data.user.phone_verified, true);
+    assert.equal(res.data.user.email, TEST_STUDENT_EMAIL);
   });
 
   // 14. Student profile restoration (class, batch, session)
@@ -633,4 +724,31 @@ test('BEAST Academy — Step 12: Real Google Sign-In & Student Activation Matrix
     assert.equal(doubtImgRes.status, 403);
     assert.equal(doubtImgRes.data.success, false);
   });
+
+  // 26. Deprecated phone routes return HTTP 410 Gone
+  await t.test('26. Deprecated phone routes return HTTP 410 Gone', async () => {
+    const resSend = await api('/api/auth/phone/send-otp', {
+      method: 'POST',
+      body: { phone: '+91 98765 00000' }
+    });
+    assert.equal(resSend.status, 410);
+    assert.equal(resSend.data.success, false);
+    assert.match(resSend.data.error, /removed|deprecated/i);
+
+    const resVerify = await api('/api/auth/phone/verify-otp', {
+      method: 'POST',
+      body: { phone: '+91 98765 00000', otp: '123456' }
+    });
+    assert.equal(resVerify.status, 410);
+    assert.equal(resVerify.data.success, false);
+    assert.match(resVerify.data.error, /removed|deprecated/i);
+  });
+
+  // 27. Zero SMS provider variables required or present in configuration
+  await t.test('27. Zero SMS provider variables required or present in configuration', async () => {
+    assert.equal(config.otpProvider, undefined, 'otpProvider must be removed from config');
+    assert.equal(config.emailProvider, 'console', 'emailProvider must default to console');
+    assert.equal(config.emailOtpTtlMinutes, 10, 'emailOtpTtlMinutes must default to 10');
+  });
 });
+
