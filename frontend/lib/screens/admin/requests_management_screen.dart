@@ -38,9 +38,12 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
     String endpoint = ApiConstants.requests;
     if (isSuperAdmin) {
       if (_statusFilter == 'PENDING') {
-        endpoint = '${ApiConstants.requests}?status=PENDING_SUPER_ADMIN_REVIEW';
+        // Backend default for Super Admin returns PENDING_SUPER_ADMIN_REVIEW + PENDING_ADMIN_REVIEW
+        endpoint = ApiConstants.requests;
       } else if (_statusFilter != 'ALL') {
         endpoint = '${ApiConstants.requests}?status=$_statusFilter';
+      } else {
+        endpoint = '${ApiConstants.requests}?status=ALL';
       }
     } else {
       endpoint = '${ApiConstants.requests}?status=PENDING_ADMIN_REVIEW';
@@ -59,6 +62,50 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
       setState(() => _error = 'Network error loading requests: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleDelete(String id, String applicantName) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Application'),
+        content: Text('Are you sure you want to permanently delete the application for "$applicantName"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: BeastColors.error, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final res = await _api.delete(ApiConstants.requestDelete(id));
+      if (res.success) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Application deleted successfully.'), backgroundColor: BeastColors.success),
+        );
+        _loadRequests();
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(res.error ?? 'Failed to delete application.'), backgroundColor: BeastColors.error),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: BeastColors.error),
+      );
     }
   }
 
@@ -302,7 +349,7 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
   Widget _buildRequestCard(Map<String, dynamic> req, bool isSuperAdmin) {
     final status = req['status'] as String? ?? '';
     final role = req['requested_role'] as String? ?? 'student';
-    final canApprove = (isSuperAdmin && status == 'PENDING_SUPER_ADMIN_REVIEW') ||
+    final canApprove = (isSuperAdmin && (status == 'PENDING_SUPER_ADMIN_REVIEW' || status == 'PENDING_ADMIN_REVIEW')) ||
         (!isSuperAdmin && status == 'PENDING_ADMIN_REVIEW');
 
     return BeastCard(
@@ -402,33 +449,42 @@ class _RequestsManagementScreenState extends State<RequestsManagementScreen> {
             ),
 
           // Actions
-          if (canApprove) ...[
-            const SizedBox(height: 14),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                OutlinedButton(
-                  onPressed: () => _showRejectDialog(req['id'], req['name'] ?? 'Applicant'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: BeastColors.error,
-                    side: const BorderSide(color: BeastColors.error),
-                  ),
-                  child: const Text('Reject'),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                onPressed: () => _handleDelete(req['id'], req['name'] ?? 'Applicant'),
+                icon: const Icon(Icons.delete_outline, size: 20, color: BeastColors.error),
+                tooltip: 'Delete Application Permanently',
+              ),
+              if (canApprove)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    OutlinedButton(
+                      onPressed: () => _showRejectDialog(req['id'], req['name'] ?? 'Applicant'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: BeastColors.error,
+                        side: const BorderSide(color: BeastColors.error),
+                      ),
+                      child: const Text('Reject'),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () => _showApproveDialog(req),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: BeastColors.dark900,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: Text(
+                        isSuperAdmin ? 'Authorize & Activate' : 'Approve & Forward',
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () => _showApproveDialog(req),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: BeastColors.dark900,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: Text(
-                    isSuperAdmin ? 'Authorize & Activate' : 'Approve & Forward',
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ],
       ),
     );

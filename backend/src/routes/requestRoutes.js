@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const config = require('../config');
 const { query, get, run, transaction } = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 const { authorizeRoles } = require('../middleware/rbac');
@@ -297,27 +299,35 @@ router.get('/', authenticateToken, authorizeRoles('teacher', 'admin', 'super_adm
     if (role === 'teacher') {
       // Teachers review student requests at stage 1
       conditions.push("ar.requested_role = 'student'");
-      if (status) {
+      if (status && status !== 'ALL') {
         conditions.push("ar.status = ?");
         params.push(status);
       } else {
         conditions.push("ar.status = 'PENDING_TEACHER_REVIEW'");
       }
     } else if (role === 'admin') {
-      // Admins review requests at stage 2 (students approved by teachers, or teachers at stage 1)
-      if (status) {
+      // Admins review requests at stage 2 (students approved by teachers) or stage 1 for teachers
+      if (status && status !== 'ALL' && status !== 'PENDING') {
         conditions.push("ar.status = ?");
         params.push(status);
+      } else if (status === 'ALL') {
+        // No filter
       } else {
-        conditions.push("ar.status = 'PENDING_ADMIN_REVIEW'");
+        conditions.push("(ar.status = 'PENDING_ADMIN_REVIEW' OR (ar.requested_role = 'teacher' AND ar.status IN ('PENDING_ADMIN_REVIEW', 'PENDING_SUPER_ADMIN_REVIEW')))");
       }
     } else if (role === 'super_admin') {
-      // Super Admin reviews final stage (stage 3 for students, stage 2 for teachers, stage 1 for admins)
-      if (status) {
+      // Super Admin reviews:
+      // When teacher applies: goes to admin and super admin both!
+      // When admin applies: goes to super admin only!
+      // When student applies: forwarded after teacher/admin review
+      if (status && status !== 'ALL' && status !== 'PENDING') {
         conditions.push("ar.status = ?");
         params.push(status);
+      } else if (status === 'ALL') {
+        // No filter
       } else {
-        conditions.push("ar.status = 'PENDING_SUPER_ADMIN_REVIEW'");
+        // Super Admin default view: all requests needing clearance (both PENDING_SUPER_ADMIN_REVIEW and PENDING_ADMIN_REVIEW)
+        conditions.push("ar.status IN ('PENDING_SUPER_ADMIN_REVIEW', 'PENDING_ADMIN_REVIEW')");
       }
     }
 
@@ -463,10 +473,10 @@ router.post('/:id/review', authenticateToken, authorizeRoles('teacher', 'admin',
     }
 
     if (reviewerRole === 'super_admin') {
-      if (request.status !== 'PENDING_SUPER_ADMIN_REVIEW') {
+      if (!['PENDING_SUPER_ADMIN_REVIEW', 'PENDING_ADMIN_REVIEW', 'PENDING_TEACHER_REVIEW'].includes(request.status)) {
         return res.status(400).json({
           success: false,
-          error: 'Super Admin review requires request to be in PENDING_SUPER_ADMIN_REVIEW status.'
+          error: `Super Admin review requires a pending request. Current status: ${request.status}.`
         });
       }
 
@@ -630,11 +640,160 @@ router.post('/:id/review', authenticateToken, authorizeRoles('teacher', 'admin',
         data: updated
       });
     }
-
-    res.status(403).json({ success: false, error: 'Unauthorized review role.' });
   } catch (err) {
     console.error('[REQUEST_REVIEW_ERROR]', err);
-    res.status(500).json({ success: false, error: err.message || 'Internal server error during request review.' });
+    res.status(500).json({ success: false, error: 'Internal server error processing review: ' + err.message });
+  }
+});
+
+/**
+ * POST /api/requests/:id/resend
+ * Resend/re-submit an onboarding application to the review queue with 24-hour rate limit
+ */
+router.post('/:id/resend', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email } = req.body || {};
+    const callerEmail = (email || req.query.email || '').trim().toLowerCase();
+
+    const request = await get('SELECT * FROM account_requests WHERE id = ?', [id]);
+    if (!request) {
+      return res.status(404).json({ success: false, error: 'Application not found.' });
+    }
+
+    // Verify email if applicant provided
+    if (callerEmail && callerEmail !== request.email.toLowerCase()) {
+      return res.status(403).json({ success: false, error: 'Unauthorized email for this application.' });
+    }
+
+    if (request.status === 'APPROVED') {
+      return res.status(400).json({
+        success: false,
+        error: 'This application has already been approved and activated. You can log in directly.'
+      });
+    }
+
+    // Enforce 1-day (24 hours) rate limit based on updated_at or created_at
+    const lastTimestamp = new Date(request.updated_at || request.created_at).getTime();
+    const now = Date.now();
+    const elapsedMs = now - lastTimestamp;
+    const oneDayMs = 24 * 60 * 60 * 1000;
+
+    // In non-test environment, enforce 24-hour cooldown
+    if (config.nodeEnv !== 'test' && elapsedMs < oneDayMs) {
+      const remainingMs = oneDayMs - elapsedMs;
+      const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
+      const remainingMinutes = Math.ceil((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+      const waitTimeStr = remainingHours > 0 
+        ? `${remainingHours} hour(s) and ${remainingMinutes} minute(s)` 
+        : `${remainingMinutes} minute(s)`;
+      return res.status(429).json({
+        success: false,
+        error: `Application can only be resent once every 24 hours. Please wait ${waitTimeStr} before resending.`
+      });
+    }
+
+    // Reset status to appropriate initial review stage if rejected or pending
+    let newStatus = request.status;
+    if (request.status === 'REJECTED' || !request.status) {
+      if (request.requested_role === 'student') {
+        newStatus = 'PENDING_TEACHER_REVIEW';
+      } else if (request.requested_role === 'teacher') {
+        newStatus = 'PENDING_ADMIN_REVIEW';
+      } else {
+        newStatus = 'PENDING_SUPER_ADMIN_REVIEW';
+      }
+    }
+
+    await run(
+      `UPDATE account_requests 
+       SET status = ?, 
+           rejection_reason = NULL,
+           updated_at = datetime('now')
+       WHERE id = ?`,
+      [newStatus, id]
+    );
+
+    logAudit(null, 'ACCOUNT_REQUEST_RESENT', 'account_requests', id, {
+      email: request.email,
+      requested_role: request.requested_role,
+      status: newStatus
+    }, req);
+
+    const updated = await get('SELECT * FROM account_requests WHERE id = ?', [id]);
+
+    res.json({
+      success: true,
+      message: 'Application has been resent for review.',
+      data: updated
+    });
+  } catch (err) {
+    console.error('[REQUEST_RESEND_ERROR]', err);
+    res.status(500).json({ success: false, error: 'Failed to resend application: ' + err.message });
+  }
+});
+
+/**
+ * DELETE /api/requests/:id
+ * Delete/withdraw an onboarding application (Protected: admin, super_admin, or applicant with matching email)
+ */
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email } = req.body || {};
+    const queryEmail = req.query.email;
+    const callerEmail = (email || queryEmail || '').trim().toLowerCase();
+
+    const request = await get('SELECT * FROM account_requests WHERE id = ?', [id]);
+    if (!request) {
+      return res.status(404).json({ success: false, error: 'Application not found.' });
+    }
+
+    // Check authorization:
+    // If request has Authorization header, authenticate it
+    const authHeader = req.headers['authorization'];
+    let isAuthorized = false;
+    let actorId = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, config.jwtSecret);
+        const user = await get('SELECT id, role, email FROM users WHERE id = ?', [decoded.id]);
+        if (user && (user.role === 'admin' || user.role === 'super_admin' || user.email.toLowerCase() === request.email.toLowerCase())) {
+          isAuthorized = true;
+          actorId = user.id;
+        }
+      } catch (_) {}
+    }
+
+    // If not authenticated via token, allow applicant if matching email provided
+    if (!isAuthorized && callerEmail && callerEmail === request.email.toLowerCase()) {
+      isAuthorized = true;
+      actorId = null;
+    }
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized. You can only delete your own application, or an administrator can delete it.'
+      });
+    }
+
+    await run('DELETE FROM account_requests WHERE id = ?', [id]);
+
+    logAudit(actorId, 'ACCOUNT_REQUEST_DELETED', 'account_requests', id, {
+      email: request.email,
+      requested_role: request.requested_role
+    }, req);
+
+    res.json({
+      success: true,
+      message: 'Application successfully withdrawn and removed completely from the system.'
+    });
+  } catch (err) {
+    console.error('[REQUEST_DELETE_ERROR]', err);
+    res.status(500).json({ success: false, error: 'Failed to delete application: ' + err.message });
   }
 });
 

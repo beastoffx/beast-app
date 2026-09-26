@@ -104,4 +104,7 @@ class ApiConstants {
   static const String admins = '/api/admins';
   static const String requests = '/api/requests';
   static const String requestsStatus = '/api/requests/status';
+  static String requestReview(String id) => '/api/requests/$id/review';
+  static String requestResend(String id) => '/api/requests/$id/resend';
+  static String requestDelete(String id) => '/api/requests/$id';
 }

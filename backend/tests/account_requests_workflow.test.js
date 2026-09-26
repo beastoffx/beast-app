@@ -310,6 +310,58 @@ test('Multi-tier Account Onboarding & Verification Workflow Suite', async (t) =>
     assert.ok(teacherProfile.employee_code.startsWith('TCH-2027-'));
   });
 
+  // 11b. Teacher application is directly visible to Super Admin AND Admin, and Super Admin can directly activate it
+  await t.test('11b. Teacher application is directly visible to Super Admin and Super Admin can activate directly', async () => {
+    const directTeacherEmail = 'direct.teacher@example.com';
+    const submitRes = await api('/api/requests', {
+      method: 'POST',
+      body: {
+        name: 'Direct Teacher',
+        email: directTeacherEmail,
+        phone: '+91 99999 88884',
+        requested_role: 'teacher',
+        qualification: 'Ph.D. Chemistry',
+        department: 'Chemistry'
+      }
+    });
+    assert.equal(submitRes.status, 201);
+    const directTeacherReqId = submitRes.data.data.id;
+    assert.equal(submitRes.data.data.status, 'PENDING_ADMIN_REVIEW');
+
+    // Check visible to Super Admin in default review queue
+    const superListRes = await api('/api/requests', {
+      headers: { Authorization: `Bearer ${superAdminToken}` }
+    });
+    assert.equal(superListRes.status, 200);
+    const inSuperQueue = superListRes.data.data.find(r => r.id === directTeacherReqId);
+    assert.ok(inSuperQueue, 'Teacher request must appear directly in Super Admin review queue');
+
+    // Check visible to Admin in review queue
+    const adminListRes = await api('/api/requests', {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert.equal(adminListRes.status, 200);
+    const inAdminQueue = adminListRes.data.data.find(r => r.id === directTeacherReqId);
+    assert.ok(inAdminQueue, 'Teacher request must appear in Admin review queue');
+
+    // Super Admin approves directly from PENDING_ADMIN_REVIEW
+    const directApproveRes = await api(`/api/requests/${directTeacherReqId}/review`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${superAdminToken}` },
+      body: { action: 'approve', reviewNotes: 'Direct Super Admin clearance' }
+    });
+    assert.equal(directApproveRes.status, 200);
+    assert.equal(directApproveRes.data.data.status, 'APPROVED');
+
+    const createdTeacher = get('SELECT * FROM users WHERE email = ?', [directTeacherEmail]);
+    assert.ok(createdTeacher);
+    assert.equal(createdTeacher.role, 'teacher');
+    assert.equal(createdTeacher.status, 'active');
+
+    run('DELETE FROM users WHERE email = ?', [directTeacherEmail]);
+    run('DELETE FROM account_requests WHERE email = ?', [directTeacherEmail]);
+  });
+
   // 12. Admin onboarding flow: starts at PENDING_SUPER_ADMIN_REVIEW -> Super Admin activates
   await t.test('12. Admin onboarding flow: Super Admin activates directly', async () => {
     const submitRes = await api('/api/requests', {
@@ -377,7 +429,43 @@ test('Multi-tier Account Onboarding & Verification Workflow Suite', async (t) =>
     assert.equal(unauthSwitch.status, 403);
   });
 
+  // 14. Application Resend endpoint
+  await t.test('14. Resend application endpoint resets review status and refreshes timestamp', async () => {
+    // Create temporary application to test resend
+    const tempEmail = 'resend.test@example.com';
+    const subRes = await api('/api/requests', {
+      method: 'POST',
+      body: {
+        name: 'Resend Applicant',
+        email: tempEmail,
+        requested_role: 'teacher',
+        qualification: 'M.Sc.'
+      }
+    });
+    assert.equal(subRes.status, 201);
+    const tempId = subRes.data.data.id;
+
+    const resendRes = await api(`/api/requests/${tempId}/resend`, {
+      method: 'POST',
+      body: { email: tempEmail }
+    });
+    assert.equal(resendRes.status, 200);
+    assert.equal(resendRes.data.success, true);
+    assert.equal(resendRes.data.data.status, 'PENDING_ADMIN_REVIEW');
+
+    // 15. Application Delete endpoint
+    const deleteRes = await api(`/api/requests/${tempId}`, {
+      method: 'DELETE',
+      body: { email: tempEmail }
+    });
+    assert.equal(deleteRes.status, 200);
+    assert.equal(deleteRes.data.success, true);
+
+    const deletedRow = get('SELECT id FROM account_requests WHERE id = ?', [tempId]);
+    assert.equal(deletedRow, undefined, 'Application must be totally removed from database');
+  });
+
   // Cleanup test records
-  run('DELETE FROM users WHERE email IN (?, ?, ?)', [testStudentEmail, testTeacherEmail, testAdminEmail]);
-  run('DELETE FROM account_requests WHERE email IN (?, ?, ?)', [testStudentEmail, testTeacherEmail, testAdminEmail]);
+  run('DELETE FROM users WHERE email IN (?, ?, ?, ?)', [testStudentEmail, testTeacherEmail, testAdminEmail, 'resend.test@example.com']);
+  run('DELETE FROM account_requests WHERE email IN (?, ?, ?, ?)', [testStudentEmail, testTeacherEmail, testAdminEmail, 'resend.test@example.com']);
 });

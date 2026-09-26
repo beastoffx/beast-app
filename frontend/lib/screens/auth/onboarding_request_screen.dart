@@ -207,6 +207,96 @@ class _OnboardingRequestScreenState extends State<OnboardingRequestScreen>
     }
   }
 
+  Future<void> _resendApplication(String id, String email) async {
+    try {
+      final url = Uri.parse('${ApiConstants.baseUrl}/api/requests/$id/resend');
+      final res = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      );
+      final data = jsonDecode(res.body);
+      if (res.statusCode == 200) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Application resent successfully.'),
+            backgroundColor: BeastColors.success,
+          ),
+        );
+        _trackStatus(email);
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['error'] ?? 'Failed to resend application.'),
+            backgroundColor: BeastColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: BeastColors.error),
+      );
+    }
+  }
+
+  Future<void> _confirmDeleteApplication(String id, String email) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Application'),
+        content: const Text(
+          'Are you sure you want to completely withdraw and delete this application from B.E.A.S.T Academy? This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: BeastColors.error, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final url = Uri.parse('${ApiConstants.baseUrl}/api/requests/$id?email=${Uri.encodeComponent(email)}');
+      final res = await http.delete(url, headers: {'Content-Type': 'application/json'}, body: jsonEncode({'email': email}));
+      final data = jsonDecode(res.body);
+
+      if (res.statusCode == 200) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Application removed totally from the app.'),
+            backgroundColor: BeastColors.success,
+          ),
+        );
+        _trackStatus(email);
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['error'] ?? 'Failed to delete application.'),
+            backgroundColor: BeastColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: BeastColors.error),
+      );
+    }
+  }
+
   void _showSuccessDialog(Map<String, dynamic> requestData) {
     showDialog(
       context: context,
@@ -610,6 +700,7 @@ class _OnboardingRequestScreenState extends State<OnboardingRequestScreen>
   }
 
   Widget _buildTimelineCard(Map<String, dynamic> req) {
+    final id = req['id']?.toString() ?? '';
     final status = req['status'] as String? ?? 'UNKNOWN';
     final role = req['requested_role'] as String? ?? 'student';
     final studentId = req['generated_student_id'] as String?;
@@ -659,17 +750,18 @@ class _OnboardingRequestScreenState extends State<OnboardingRequestScreen>
               isCurrent: status == 'PENDING_TEACHER_REVIEW',
               isRejected: status == 'REJECTED' && req['teacher_reviewed_at'] != null,
             ),
+          if (role == 'student' || role == 'teacher')
+            _buildTimelineStep(
+              title: role == 'student' ? '3. Institutional Admin Clearance' : '2. Admin & Super Admin Review',
+              subtitle: status == 'PENDING_ADMIN_REVIEW'
+                  ? (role == 'teacher' ? 'In review by Admin & Super Admin' : 'In review by Academy Administrator')
+                  : (status == 'REJECTED' && req['admin_reviewed_at'] != null ? 'Rejected' : 'Approved by Admin'),
+              isDone: ['PENDING_SUPER_ADMIN_REVIEW', 'APPROVED'].contains(status),
+              isCurrent: status == 'PENDING_ADMIN_REVIEW',
+              isRejected: status == 'REJECTED' && req['admin_reviewed_at'] != null,
+            ),
           _buildTimelineStep(
-            title: role == 'student' ? '3. Institutional Admin Clearance' : '2. Administration Review',
-            subtitle: status == 'PENDING_ADMIN_REVIEW'
-                ? 'In review by Academy Administrator'
-                : (status == 'REJECTED' && req['admin_reviewed_at'] != null ? 'Rejected' : 'Approved by Admin'),
-            isDone: ['PENDING_SUPER_ADMIN_REVIEW', 'APPROVED'].contains(status),
-            isCurrent: status == 'PENDING_ADMIN_REVIEW',
-            isRejected: status == 'REJECTED' && req['admin_reviewed_at'] != null,
-          ),
-          _buildTimelineStep(
-            title: 'Final Super Admin Executive Activation',
+            title: role == 'admin' ? '2. Super Admin Review & Activation' : 'Final Super Admin Executive Activation',
             subtitle: status == 'APPROVED'
                 ? (studentId != null ? 'Activated! Student ID: $studentId' : 'Account Activated')
                 : (status == 'PENDING_SUPER_ADMIN_REVIEW' ? 'Pending Super Admin authorization' : 'Awaiting clearance'),
@@ -719,6 +811,34 @@ class _OnboardingRequestScreenState extends State<OnboardingRequestScreen>
               ),
             ),
           ],
+
+          // Actions: Delete / Withdraw & Resend (with 24h rate limit)
+          const SizedBox(height: 16),
+          const Divider(height: 1, color: BeastColors.borderSubtle),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: () => _confirmDeleteApplication(id, req['email'] ?? ''),
+                icon: const Icon(Icons.delete_outline, size: 16, color: BeastColors.error),
+                label: const Text('Delete Application', style: TextStyle(color: BeastColors.error, fontSize: 12)),
+              ),
+              if (status != 'APPROVED') ...[
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () => _resendApplication(id, req['email'] ?? ''),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: BeastColors.dark900,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  icon: const Icon(Icons.replay, size: 16),
+                  label: const Text('Resend Application', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ],
+          ),
         ],
       ),
     );
