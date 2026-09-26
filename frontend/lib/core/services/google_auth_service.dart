@@ -7,19 +7,27 @@ class GoogleAuthService {
 
   static bool _initialized = false;
 
-  static Future<void> _ensureInitialized() async {
+  static Future<void> ensureInitialized() async {
     if (!_initialized) {
       await GoogleSignIn.instance.initialize(
         clientId: kIsWeb ? webClientId : null,
-        serverClientId: webClientId,
+        serverClientId: kIsWeb ? null : webClientId,
       );
       _initialized = true;
     }
   }
 
+  static Stream<GoogleSignInAuthenticationEvent> get authenticationEvents {
+    return GoogleSignIn.instance.authenticationEvents;
+  }
+
   static Future<GoogleSignInAccount?> signIn() async {
+    if (kIsWeb) {
+      debugPrint('[GoogleAuthService] Direct authenticate() not supported on web. Use renderButton().');
+      return null;
+    }
     try {
-      await _ensureInitialized();
+      await ensureInitialized();
       final account = await GoogleSignIn.instance.authenticate(
         scopeHint: const ['email', 'profile', 'openid'],
       );

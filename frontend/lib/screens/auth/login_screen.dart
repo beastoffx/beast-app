@@ -1,10 +1,15 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
+import '../../core/services/google_auth_service.dart';
 import '../../core/theme/beast_tokens.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/beast_components.dart';
 import '../../widgets/beast_logo.dart';
 import '../../widgets/google_logo.dart';
+import '../../widgets/google_web_button/google_web_button.dart';
 import 'onboarding_request_screen.dart';
 import 'student_activation_screen.dart';
 
@@ -20,9 +25,54 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  StreamSubscription<GoogleSignInAuthenticationEvent>? _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) {
+      _initWebGoogleSignIn();
+    }
+  }
+
+  Future<void> _initWebGoogleSignIn() async {
+    await GoogleAuthService.ensureInitialized();
+    _authSubscription = GoogleAuthService.authenticationEvents.listen(
+      (event) async {
+        if (!mounted) return;
+        if (event is GoogleSignInAuthenticationEventSignIn) {
+          final idToken = event.user.authentication.idToken;
+          if (idToken != null && idToken.isNotEmpty) {
+            final auth = Provider.of<AuthProvider>(context, listen: false);
+            final result = await auth.signInWithGoogle(manualIdToken: idToken);
+            if (!mounted) return;
+            if (result == 'UNLINKED') {
+              _showUnlinkedOptionsDialog(
+                auth.pendingGoogleEmail,
+                auth.pendingGoogleName,
+                auth.pendingGoogleUid,
+              );
+            } else if (result == 'ERROR') {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(auth.errorMessage ?? 'Google authentication failed.'),
+                  backgroundColor: BeastColors.danger,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          }
+        }
+      },
+      onError: (err) {
+        debugPrint('[LoginScreen] Web Google Sign-In event error: $err');
+      },
+    );
+  }
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -377,31 +427,39 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: BeastSpacing.xl),
 
-            // Authentic Google Login Button
-            OutlinedButton(
-              onPressed: auth.isLoading ? null : _handleGoogleSignIn,
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                side: const BorderSide(color: BeastColors.borderStrong),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(BeastRadius.sm)),
-                backgroundColor: BeastColors.white,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const GoogleLogo(size: 20),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Continue with Google',
-                    style: TextStyle(
-                      color: BeastColors.dark900,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
+            // Authentic Google Login Button (Web: official GIS renderButton; Mobile: native button)
+            if (kIsWeb)
+              Center(
+                child: SizedBox(
+                  height: 44,
+                  child: buildGoogleWebSignInButton(),
+                ),
+              )
+            else
+              OutlinedButton(
+                onPressed: auth.isLoading ? null : _handleGoogleSignIn,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  side: const BorderSide(color: BeastColors.borderStrong),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(BeastRadius.sm)),
+                  backgroundColor: BeastColors.white,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const GoogleLogo(size: 20),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Continue with Google',
+                      style: TextStyle(
+                        color: BeastColors.dark900,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
             const SizedBox(height: BeastSpacing.lg),
 
             // Divider
