@@ -18,6 +18,7 @@ class AuthProvider with ChangeNotifier {
   String? _pendingGoogleEmail;
   String? _pendingGoogleName;
   String? _pendingGooglePicture;
+  List<Map<String, dynamic>> _pendingRequests = [];
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -31,12 +32,17 @@ class AuthProvider with ChangeNotifier {
   String? get pendingGoogleEmail => _pendingGoogleEmail;
   String? get pendingGoogleName => _pendingGoogleName;
   String? get pendingGooglePicture => _pendingGooglePicture;
+  List<Map<String, dynamic>> get pendingRequests => _pendingRequests;
 
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _user != null;
 
   String get role => _user?.role ?? '';
+  String get activeRole => _user?.activeRole ?? _user?.role ?? '';
+  List<String> get availableRoles => _user?.availableRoles ?? (_user != null ? [_user!.role] : []);
+  bool get canSwitchRoles => isSuperAdmin || availableRoles.length > 1;
+
   bool get isStudent => _user?.isStudent ?? false;
   bool get isTeacher => _user?.isTeacher ?? false;
   bool get isAdmin => _user?.isAdmin ?? false;
@@ -146,6 +152,56 @@ class AuthProvider with ChangeNotifier {
     return response.success;
   }
 
+  Future<bool> switchRole(String targetRole) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    final response = await _api.post(ApiConstants.switchRole, {
+      'role': targetRole,
+    });
+
+    _isLoading = false;
+
+    if (response.success && response.data != null) {
+      final data = response.data;
+      final token = data['token'];
+      final userObj = data['user'];
+      final profileObj = data['profile'];
+
+      if (token != null) {
+        _api.setToken(token);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('auth_token', token);
+      }
+
+      if (userObj != null) {
+        _user = UserModel.fromJson(userObj);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('auth_user', jsonEncode(userObj));
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      if (profileObj != null) {
+        await prefs.setString('auth_profile', jsonEncode(profileObj));
+        if (_user!.isStudent) {
+          _studentProfile = StudentProfileModel.fromJson(profileObj);
+        } else if (_user!.isTeacher) {
+          _teacherProfile = profileObj;
+        } else if (_user!.isAdmin) {
+          _adminProfile = profileObj;
+        }
+      }
+
+      notifyListeners();
+      return true;
+    } else {
+      _errorMessage = response.error ?? 'Failed to switch sector.';
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> logout() async {
     try {
       await _api.post(ApiConstants.logout, {});
@@ -156,6 +212,7 @@ class AuthProvider with ChangeNotifier {
     _studentProfile = null;
     _teacherProfile = null;
     _adminProfile = null;
+    _pendingRequests = [];
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_token');
@@ -233,6 +290,13 @@ class AuthProvider with ChangeNotifier {
         _pendingGoogleEmail = data['email'];
         _pendingGoogleName = data['name'];
         _pendingGooglePicture = data['picture'];
+        if (data['pending_requests'] is List) {
+          _pendingRequests = (data['pending_requests'] as List)
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+        } else {
+          _pendingRequests = [];
+        }
         notifyListeners();
         return 'UNLINKED';
       }

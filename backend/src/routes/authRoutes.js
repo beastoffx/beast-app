@@ -61,22 +61,8 @@ router.post('/login', async (req, res) => {
   const token = jwt.sign(tokenPayload, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
 
   // Fetch role-specific profile details
-  let profile = null;
-  if (user.role === 'student') {
-    profile = await get(
-      `SELECT sp.*, c.name as class_name, b.name as batch_name, s.name as session_name
-       FROM student_profiles sp
-       LEFT JOIN classes c ON sp.class_id = c.id
-       LEFT JOIN batches b ON sp.batch_id = b.id
-       LEFT JOIN academic_sessions s ON sp.academic_session_id = s.id
-       WHERE sp.user_id = ?`,
-      [user.id]
-    );
-  } else if (user.role === 'teacher') {
-    profile = await get('SELECT * FROM teacher_profiles WHERE user_id = ?', [user.id]);
-  } else if (user.role === 'admin' || user.role === 'super_admin') {
-    profile = await get('SELECT * FROM admin_profiles WHERE user_id = ?', [user.id]);
-  }
+  const profile = await fetchUserProfile(user);
+  const availableRoles = await getAvailableRoles(user);
 
   logAudit(user.id, 'USER_LOGIN', 'users', user.id, { role: user.role }, req);
 
@@ -87,42 +73,37 @@ router.post('/login', async (req, res) => {
     role: user.role,
     name: user.name,
     phone: user.phone,
-    avatar_url: user.avatar_url
+    avatar_url: user.avatar_url,
+    available_roles: availableRoles,
+    active_role: user.role
   };
 
   res.json({
     success: true,
     token,
     user: safeUser,
-    profile
+    profile,
+    available_roles: availableRoles,
+    active_role: user.role
   });
 });
 
 // GET /api/auth/me
 router.get('/me', authenticateToken, async (req, res) => {
   const user = req.user;
-  let profile = null;
-
-  if (user.role === 'student') {
-    profile = await get(
-      `SELECT sp.*, c.name as class_name, b.name as batch_name, s.name as session_name
-       FROM student_profiles sp
-       LEFT JOIN classes c ON sp.class_id = c.id
-       LEFT JOIN batches b ON sp.batch_id = b.id
-       LEFT JOIN academic_sessions s ON sp.academic_session_id = s.id
-       WHERE sp.user_id = ?`,
-      [user.id]
-    );
-  } else if (user.role === 'teacher') {
-    profile = await get('SELECT * FROM teacher_profiles WHERE user_id = ?', [user.id]);
-  } else if (user.role === 'admin' || user.role === 'super_admin') {
-    profile = await get('SELECT * FROM admin_profiles WHERE user_id = ?', [user.id]);
-  }
+  const profile = await fetchUserProfile(user);
+  const availableRoles = await getAvailableRoles(user);
 
   res.json({
     success: true,
-    user,
-    profile
+    user: {
+      ...user,
+      available_roles: availableRoles,
+      active_role: user.role
+    },
+    profile,
+    available_roles: availableRoles,
+    active_role: user.role
   });
 });
 
@@ -191,10 +172,30 @@ router.post('/logout', authenticateToken, (req, res) => {
   });
 });
 
+// Helper: Fetch available institutional roles for a user
+async function getAvailableRoles(user) {
+  if (user.role === 'super_admin' || user.isSuperAdmin || user.primary_role === 'super_admin') {
+    return ['super_admin', 'admin', 'teacher', 'student'];
+  }
+  const roles = new Set();
+  if (user.role) {
+    roles.add(user.role);
+  }
+  const [stu, tch, adm] = await Promise.all([
+    get('SELECT id FROM student_profiles WHERE user_id = ?', [user.id]),
+    get('SELECT id FROM teacher_profiles WHERE user_id = ?', [user.id]),
+    get('SELECT id FROM admin_profiles WHERE user_id = ?', [user.id])
+  ]);
+  if (stu) roles.add('student');
+  if (tch) roles.add('teacher');
+  if (adm) roles.add('admin');
+  return Array.from(roles);
+}
+
 // Helper: Fetch role profile with full academic details
 async function fetchUserProfile(user) {
   if (user.role === 'student') {
-    return await get(
+    const sp = await get(
       `SELECT sp.*, c.name as class_name, b.name as batch_name, s.name as session_name
        FROM student_profiles sp
        LEFT JOIN classes c ON sp.class_id = c.id
@@ -203,13 +204,86 @@ async function fetchUserProfile(user) {
        WHERE sp.user_id = ?`,
       [user.id]
     );
+    if (!sp && (user.role === 'super_admin' || user.isSuperAdmin || user.primary_role === 'super_admin')) {
+      return {
+        id: 'super-admin-student-preview',
+        user_id: user.id,
+        student_id_number: 'BST-EXEC-PREVIEW',
+        class_name: 'Executive All-Access',
+        batch_name: 'Master Sandbox',
+        session_name: '2026-2027',
+        subscription_status: 'paid'
+      };
+    }
+    return sp;
   } else if (user.role === 'teacher') {
-    return await get('SELECT * FROM teacher_profiles WHERE user_id = ?', [user.id]);
+    const tp = await get('SELECT * FROM teacher_profiles WHERE user_id = ?', [user.id]);
+    if (!tp && (user.role === 'super_admin' || user.isSuperAdmin || user.primary_role === 'super_admin')) {
+      return {
+        id: 'super-admin-teacher-preview',
+        user_id: user.id,
+        employee_code: 'FAC-EXEC-PREVIEW',
+        qualification: 'Executive Academic Leadership',
+        bio: 'Institutional Administrator & Academic Director'
+      };
+    }
+    return tp;
   } else if (user.role === 'admin' || user.role === 'super_admin') {
     return await get('SELECT * FROM admin_profiles WHERE user_id = ?', [user.id]);
   }
   return null;
 }
+
+// POST /api/auth/switch-role
+router.post('/switch-role', authenticateToken, async (req, res) => {
+  const { role } = req.body;
+  if (!role) {
+    return res.status(400).json({ success: false, error: 'Target role is required.' });
+  }
+
+  const allowedRoles = await getAvailableRoles(req.user);
+  if (!allowedRoles.includes(role)) {
+    return res.status(403).json({
+      success: false,
+      error: `You do not have access to the ${role} sector. Available sectors: ${allowedRoles.join(', ')}`
+    });
+  }
+
+  const tokenPayload = {
+    id: req.user.id,
+    email: req.user.email,
+    role: role,
+    name: req.user.name,
+    googleUid: req.user.google_uid
+  };
+  const token = jwt.sign(tokenPayload, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+
+  const switchedUser = { ...req.user, role };
+  const profile = await fetchUserProfile(switchedUser);
+
+  logAudit(req.user.id, 'ROLE_SWITCHED', 'users', req.user.id, { from: req.user.role, to: role }, req);
+
+  res.json({
+    success: true,
+    token,
+    active_role: role,
+    available_roles: allowedRoles,
+    user: {
+      id: req.user.id,
+      google_uid: req.user.google_uid,
+      email: req.user.email,
+      role: role,
+      name: req.user.name,
+      phone: req.user.phone,
+      phone_verified: Boolean(req.user.phone_verified),
+      status: req.user.status,
+      avatar_url: req.user.avatar_url,
+      available_roles: allowedRoles,
+      active_role: role
+    },
+    profile
+  });
+});
 
 // POST /api/auth/google
 // Primary authentication mechanism for Google Sign-In
@@ -235,14 +309,36 @@ router.post('/google', async (req, res) => {
     const { googleUid, email, name, picture } = verification;
 
     // 1. Check whether googleUid is already linked to an existing account
-    const user = await get(
+    let user = await get(
       `SELECT id, google_uid, email, role, name, phone, phone_verified, status, avatar_url, is_active 
        FROM users WHERE google_uid = ?`,
       [googleUid]
     );
 
+    // 2. Account is not linked by google_uid. Check if existing user matches verified Google email
+    if (!user) {
+      const emailUser = await get(
+        `SELECT id, google_uid, email, role, name, phone, phone_verified, status, avatar_url, is_active 
+         FROM users WHERE email = ?`,
+        [email]
+      );
+      if (emailUser) {
+        if (!emailUser.is_active || emailUser.status === 'suspended' || emailUser.status === 'archived') {
+          return res.status(403).json({
+            success: false,
+            error: emailUser.status === 'archived'
+              ? 'Your account has been archived. Access is disabled.'
+              : 'Your account has been suspended by administration. Please contact support.'
+          });
+        }
+        await run("UPDATE users SET google_uid = ?, updated_at = datetime('now') WHERE id = ?", [googleUid, emailUser.id]);
+        user = { ...emailUser, google_uid: googleUid };
+        logAudit(user.id, 'GOOGLE_AUTO_LINKED', 'users', user.id, { email, googleUid }, req);
+      }
+    }
+
     if (user) {
-      // Returning student/user on any device: verify authorization
+      // Returning user on any device: verify authorization
       if (!user.is_active || user.status === 'suspended' || user.status === 'archived') {
         return res.status(403).json({
           success: false,
@@ -269,12 +365,15 @@ router.post('/google', async (req, res) => {
       );
 
       const profile = await fetchUserProfile(user);
+      const availableRoles = await getAvailableRoles(user);
       logAudit(user.id, 'GOOGLE_LOGIN_SUCCESS', 'users', user.id, { role: user.role, googleUid }, req);
 
       return res.json({
         success: true,
         status: 'LINKED',
         token,
+        available_roles: availableRoles,
+        active_role: user.role,
         user: {
           id: user.id,
           google_uid: user.google_uid,
@@ -284,55 +383,23 @@ router.post('/google', async (req, res) => {
           phone: user.phone,
           phone_verified: Boolean(user.phone_verified),
           status: user.status,
-          avatar_url: user.avatar_url || picture
+          avatar_url: user.avatar_url || picture,
+          available_roles: availableRoles,
+          active_role: user.role
         },
         profile
       });
     }
 
-    // 2. Account is not linked by google_uid. Check if pre-provisioned staff matches email
-    const facultyUser = await get(
-      `SELECT * FROM users WHERE email = ? AND role IN ('admin', 'teacher', 'super_admin') AND (google_uid IS NULL OR google_uid = '')`,
+    // 3. Unlinked Google Account: check pending applications across all sectors
+    const pendingRequests = await query(
+      `SELECT id, requested_role, status, created_at 
+       FROM account_requests 
+       WHERE email = ? 
+       ORDER BY created_at DESC`,
       [email]
     );
-    if (facultyUser) {
-      if (!facultyUser.is_active || facultyUser.status === 'suspended' || facultyUser.status === 'archived') {
-        return res.status(403).json({
-          success: false,
-          error: facultyUser.status === 'archived'
-            ? 'Your account has been archived. Access is disabled.'
-            : 'Your account has been suspended by administration. Please contact support.'
-        });
-      }
 
-      await run("UPDATE users SET google_uid = ?, updated_at = datetime('now'), last_login_at = datetime('now') WHERE id = ?", [googleUid, facultyUser.id]);
-      const token = jwt.sign(
-        { id: facultyUser.id, email: facultyUser.email, role: facultyUser.role, name: facultyUser.name, googleUid },
-        config.jwtSecret,
-        { expiresIn: config.jwtExpiresIn }
-      );
-      const profile = await fetchUserProfile(facultyUser);
-      logAudit(facultyUser.id, 'FACULTY_GOOGLE_LINKED', 'users', facultyUser.id, { googleUid }, req);
-
-      return res.json({
-        success: true,
-        status: 'LINKED',
-        token,
-        user: {
-          id: facultyUser.id,
-          google_uid: googleUid,
-          email: facultyUser.email,
-          role: facultyUser.role,
-          name: facultyUser.name,
-          phone: facultyUser.phone,
-          status: facultyUser.status,
-          avatar_url: facultyUser.avatar_url || picture
-        },
-        profile
-      });
-    }
-
-    // 3. Unlinked Google Account: requires institute Student ID activation
     return res.json({
       success: true,
       status: 'UNLINKED',
@@ -340,7 +407,11 @@ router.post('/google', async (req, res) => {
       email,
       name,
       picture,
-      message: 'This Google account is not yet linked to an authorized B.E.A.S.T Academy Student ID. Please complete activation.'
+      has_pending_request: pendingRequests.length > 0,
+      pending_requests: pendingRequests,
+      message: pendingRequests.length > 0
+        ? 'Your institutional application is currently being processed. You can track status or apply for additional sectors.'
+        : 'This Google account is not yet linked to an authorized B.E.A.S.T Academy profile. Please submit an application or complete activation.'
     });
   } catch (err) {
     return res.status(500).json({ success: false, error: 'Google authentication error: ' + err.message });

@@ -49,6 +49,7 @@ class _OnboardingRequestScreenState extends State<OnboardingRequestScreen>
   // Status Tracking State
   final TextEditingController _trackingEmailController = TextEditingController();
   Map<String, dynamic>? _trackedRequest;
+  List<dynamic> _trackedRequests = [];
   bool _isTracking = false;
   String? _trackingError;
 
@@ -183,10 +184,16 @@ class _OnboardingRequestScreenState extends State<OnboardingRequestScreen>
       final res = await http.get(url).timeout(const Duration(seconds: 10));
 
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body)['data'];
+        final decoded = jsonDecode(res.body);
+        final list = decoded['requests'] ??
+            (decoded['data'] != null && decoded['data']['requests'] != null
+                ? decoded['data']['requests']
+                : (decoded['data'] != null ? [decoded['data']] : []));
+        final reqList = list is List ? list : [];
         setState(() {
-          _trackedRequest = data;
-          if (data == null) {
+          _trackedRequests = reqList;
+          _trackedRequest = decoded['data'];
+          if (reqList.isEmpty) {
             _trackingError = 'No application found for this email address.';
           }
         });
@@ -567,7 +574,34 @@ class _OnboardingRequestScreenState extends State<OnboardingRequestScreen>
                   ),
                 ),
 
-              if (_trackedRequest != null) _buildTimelineCard(_trackedRequest!),
+              if (_trackedRequests.isNotEmpty) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Applications (${_trackedRequests.length})',
+                      style: BeastTypography.h3.copyWith(fontSize: 16),
+                    ),
+                    TextButton.icon(
+                      icon: const Icon(Icons.add_circle_outline, size: 16),
+                      label: const Text('Apply for Another Sector'),
+                      onPressed: () {
+                        setState(() {
+                          _nameController.text = _trackedRequests.first['name'] ?? _nameController.text;
+                          _emailController.text = _trackingEmailController.text;
+                          _tabController.animateTo(0);
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                for (final req in _trackedRequests) ...[
+                  _buildTimelineCard(Map<String, dynamic>.from(req)),
+                  const SizedBox(height: 12),
+                ],
+              ] else if (_trackedRequest != null)
+                _buildTimelineCard(_trackedRequest!),
             ],
           ),
         ),

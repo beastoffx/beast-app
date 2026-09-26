@@ -10,6 +10,9 @@ class UserModel {
   final bool phoneVerified;
   final bool isSuperAdminFlag;
 
+  final List<String> availableRoles;
+  final String? activeRole;
+
   UserModel({
     required this.id,
     required this.email,
@@ -21,6 +24,8 @@ class UserModel {
     this.googleUid,
     this.phoneVerified = false,
     this.isSuperAdminFlag = false,
+    this.availableRoles = const [],
+    this.activeRole,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -29,6 +34,15 @@ class UserModel {
     final isSuper = roleStr == 'super_admin' ||
         json['is_super_admin'] == true ||
         json['isSuperAdmin'] == true;
+
+    List<String> avail = [];
+    if (json['available_roles'] is List) {
+      avail = List<String>.from(json['available_roles']);
+    } else if (isSuper) {
+      avail = ['super_admin', 'admin', 'teacher', 'student'];
+    } else {
+      avail = [roleStr];
+    }
 
     return UserModel(
       id: json['id'] ?? '',
@@ -41,6 +55,8 @@ class UserModel {
       googleUid: json['google_uid'] ?? json['googleUid'],
       phoneVerified: json['phone_verified'] == 1 || json['phone_verified'] == true || json['phoneVerified'] == true,
       isSuperAdminFlag: isSuper,
+      availableRoles: avail,
+      activeRole: json['active_role'] ?? roleStr,
     );
   }
 
@@ -56,6 +72,8 @@ class UserModel {
       'google_uid': googleUid,
       'phone_verified': phoneVerified,
       'is_super_admin': isSuperAdmin,
+      'available_roles': availableRoles,
+      'active_role': activeRole ?? role,
     };
   }
 

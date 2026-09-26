@@ -112,7 +112,7 @@ class _MainPortalScreenState extends State<MainPortalScreen> {
       onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
       destinations: destinations,
       drawer: _buildStudentDrawer(context, auth),
-      actions: _buildCommonActions(context, 'STUDENT'),
+      actions: _buildCommonActions(context, auth),
       body: IndexedStack(index: _currentIndex.clamp(0, pages.length - 1), children: pages),
     );
   }
@@ -124,6 +124,7 @@ class _MainPortalScreenState extends State<MainPortalScreen> {
         padding: EdgeInsets.zero,
         children: [
           _buildDrawerHeader(auth, 'Student Workspace'),
+          _buildSectorSwitchSection(context, auth),
           ListTile(
             leading: const Icon(Icons.verified_user_outlined),
             title: const Text('Attendance Register'),
@@ -204,7 +205,7 @@ class _MainPortalScreenState extends State<MainPortalScreen> {
       onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
       destinations: destinations,
       drawer: _buildTeacherDrawer(context, auth),
-      actions: _buildCommonActions(context, 'TEACHER'),
+      actions: _buildCommonActions(context, auth),
       body: IndexedStack(index: _currentIndex.clamp(0, pages.length - 1), children: pages),
     );
   }
@@ -216,6 +217,7 @@ class _MainPortalScreenState extends State<MainPortalScreen> {
         padding: EdgeInsets.zero,
         children: [
           _buildDrawerHeader(auth, 'Faculty Suite'),
+          _buildSectorSwitchSection(context, auth),
           ListTile(
             leading: const Icon(Icons.grade_outlined),
             title: const Text('Exam Scoring & Results'),
@@ -290,7 +292,7 @@ class _MainPortalScreenState extends State<MainPortalScreen> {
       onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
       destinations: destinations,
       drawer: _buildAdminDrawer(context, auth),
-      actions: _buildCommonActions(context, auth.role),
+      actions: _buildCommonActions(context, auth),
       body: IndexedStack(index: _currentIndex.clamp(0, pages.length - 1), children: pages),
     );
   }
@@ -304,6 +306,7 @@ class _MainPortalScreenState extends State<MainPortalScreen> {
         padding: EdgeInsets.zero,
         children: [
           _buildDrawerHeader(auth, isSuper ? 'Institutional Executive' : 'Institutional Admin'),
+          _buildSectorSwitchSection(context, auth),
           ListTile(
             leading: const Icon(Icons.badge_outlined),
             title: const Text('Faculty Directory'),
@@ -370,8 +373,108 @@ class _MainPortalScreenState extends State<MainPortalScreen> {
   }
 
   // ============================================================
-  // COMMON DRAWER & APPBAR UTILITIES
+  // COMMON DRAWER & APPBAR UTILITIES & SECTOR SWITCHING
   // ============================================================
+  Future<void> _handleSectorSwitch(BuildContext context, AuthProvider auth, String targetRole) async {
+    if (auth.role == targetRole) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final success = await auth.switchRole(targetRole);
+    if (!mounted) return;
+    if (success) {
+      setState(() => _currentIndex = 0);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Switched to ${targetRole.replaceAll('_', ' ').toUpperCase()} sector'),
+          backgroundColor: BeastColors.brandPrimary,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(auth.errorMessage ?? 'Failed to switch sector'),
+          backgroundColor: BeastColors.danger,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Widget _buildSectorSwitchSection(BuildContext context, AuthProvider auth) {
+    if (!auth.canSwitchRoles) return const SizedBox.shrink();
+
+    final roles = auth.availableRoles;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: BeastColors.brandPrimary.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(BeastRadius.md),
+        border: Border.all(color: BeastColors.borderSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.swap_horiz_rounded, size: 16, color: BeastColors.brandPrimary),
+              const SizedBox(width: 6),
+              Text(
+                'SWITCH SECTOR',
+                style: BeastTypography.caption.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                  color: BeastColors.brandPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: roles.map((r) {
+              final isCurrent = auth.role == r;
+              String label = 'Student';
+              IconData icon = Icons.school_rounded;
+              if (r == 'teacher') {
+                label = 'Faculty';
+                icon = Icons.psychology_rounded;
+              } else if (r == 'admin') {
+                label = 'Admin';
+                icon = Icons.admin_panel_settings_rounded;
+              } else if (r == 'super_admin') {
+                label = 'Executive';
+                icon = Icons.security_rounded;
+              }
+
+              return ChoiceChip(
+                selected: isCurrent,
+                avatar: Icon(icon, size: 14, color: isCurrent ? BeastColors.white : BeastColors.textSecondary),
+                label: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+                    color: isCurrent ? BeastColors.white : BeastColors.textPrimary,
+                  ),
+                ),
+                selectedColor: BeastColors.brandPrimary,
+                backgroundColor: BeastColors.white,
+                onSelected: (selected) {
+                  if (selected && !isCurrent) {
+                    Navigator.pop(context);
+                    _handleSectorSwitch(context, auth, r);
+                  }
+                },
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDrawerHeader(AuthProvider auth, String roleTitle) {
     return DrawerHeader(
       decoration: BoxDecoration(
@@ -399,8 +502,80 @@ class _MainPortalScreenState extends State<MainPortalScreen> {
     );
   }
 
-  List<Widget> _buildCommonActions(BuildContext context, String role) {
+  List<Widget> _buildCommonActions(BuildContext context, AuthProvider auth) {
     return [
+      if (auth.canSwitchRoles)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: PopupMenuButton<String>(
+            tooltip: 'Switch Institutional Sector',
+            onSelected: (targetRole) => _handleSectorSwitch(context, auth, targetRole),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: BeastColors.brandPrimary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(BeastRadius.sm),
+                border: Border.all(color: BeastColors.borderSubtle),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.swap_horiz_rounded, size: 16, color: BeastColors.brandPrimary),
+                  const SizedBox(width: 4),
+                  Text(
+                    auth.role == 'super_admin'
+                        ? 'Executive'
+                        : auth.role == 'teacher'
+                            ? 'Faculty'
+                            : auth.role == 'admin'
+                                ? 'Admin'
+                                : 'Student',
+                    style: BeastTypography.caption.copyWith(fontWeight: FontWeight.w700, color: BeastColors.brandPrimary),
+                  ),
+                  const Icon(Icons.arrow_drop_down, size: 16, color: BeastColors.brandPrimary),
+                ],
+              ),
+            ),
+            itemBuilder: (context) {
+              return auth.availableRoles.map((r) {
+                final isCurrent = auth.role == r;
+                String title = 'Student Workspace';
+                IconData icon = Icons.school_rounded;
+                if (r == 'teacher') {
+                  title = 'Faculty Portal';
+                  icon = Icons.psychology_rounded;
+                } else if (r == 'admin') {
+                  title = 'Administration';
+                  icon = Icons.admin_panel_settings_rounded;
+                } else if (r == 'super_admin') {
+                  title = 'Executive Command';
+                  icon = Icons.security_rounded;
+                }
+
+                return PopupMenuItem<String>(
+                  value: r,
+                  child: Row(
+                    children: [
+                      Icon(icon, size: 18, color: isCurrent ? BeastColors.brandPrimary : BeastColors.textSecondary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: TextStyle(
+                            fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w400,
+                            color: isCurrent ? BeastColors.brandPrimary : BeastColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      if (isCurrent)
+                        const Icon(Icons.check_rounded, size: 16, color: BeastColors.brandPrimary),
+                    ],
+                  ),
+                );
+              }).toList();
+            },
+          ),
+        ),
       IconButton(
         icon: const Icon(Icons.search_rounded),
         tooltip: 'Universal Search',
@@ -419,7 +594,7 @@ class _MainPortalScreenState extends State<MainPortalScreen> {
       IconButton(
         icon: const Icon(Icons.help_outline_rounded),
         tooltip: 'Role Guide',
-        onPressed: () => BeastTutorial.replay(context, role),
+        onPressed: () => BeastTutorial.replay(context, auth.role),
       ),
       const SizedBox(width: 8),
     ];

@@ -49,6 +49,30 @@ async function authenticateToken(req, res, next) {
       });
     }
 
+    // Determine base super admin privilege
+    const isSuperAdminUser = user.role === 'super_admin';
+    let effectiveRole = decoded.role || user.role;
+
+    if (effectiveRole !== user.role && !isSuperAdminUser) {
+      let eligible = false;
+      if (effectiveRole === 'student') {
+        const p = await get('SELECT id FROM student_profiles WHERE user_id = ?', [user.id]);
+        if (p) eligible = true;
+      } else if (effectiveRole === 'teacher') {
+        const p = await get('SELECT id FROM teacher_profiles WHERE user_id = ?', [user.id]);
+        if (p) eligible = true;
+      } else if (effectiveRole === 'admin') {
+        const p = await get('SELECT id FROM admin_profiles WHERE user_id = ?', [user.id]);
+        if (p) eligible = true;
+      }
+      if (!eligible) {
+        effectiveRole = user.role;
+      }
+    }
+
+    user.role = effectiveRole;
+    user.primary_role = isSuperAdminUser ? 'super_admin' : user.role;
+
     // Attach student subscription attributes if role is student
     if (user.role === 'student') {
       const studentProfile = await get(
@@ -66,11 +90,14 @@ async function authenticateToken(req, res, next) {
         } catch (_) {
           user.resource_permissions = { materials: true, doubts: true, exams: true };
         }
+      } else if (isSuperAdminUser) {
+        user.subscription_status = 'paid';
+        user.resource_permissions = { materials: true, doubts: true, exams: true };
       }
     }
 
     // Attach admin profile & permissions if role is admin or super_admin
-    if (user.role === 'admin' || user.role === 'super_admin') {
+    if (user.role === 'admin' || user.role === 'super_admin' || isSuperAdminUser) {
       const adminProfile = await get(
         'SELECT designation, permissions_json, admin_id_number FROM admin_profiles WHERE user_id = ?',
         [user.id]
@@ -87,7 +114,7 @@ async function authenticateToken(req, res, next) {
           user.permissions = {};
         }
       }
-      user.isSuperAdmin = user.role === 'super_admin' || Boolean(user.permissions?.super_admin);
+      user.isSuperAdmin = isSuperAdminUser || user.role === 'super_admin' || Boolean(user.permissions?.super_admin);
     }
 
     req.user = user;

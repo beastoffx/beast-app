@@ -80,6 +80,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (server) {
+    if (server.closeAllConnections) server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));
   }
 });
@@ -136,13 +137,33 @@ test('Multi-tier Account Onboarding & Verification Workflow Suite', async (t) =>
     assert.equal(res.data.success, false);
   });
 
-  // 3. Public status check
-  await t.test('3. Public status check returns current review status', async () => {
+  // 2b. Same email CAN submit request for a different sector (e.g. teacher)
+  await t.test('2b. Same email CAN submit onboarding request for another sector', async () => {
+    const res = await api('/api/requests', {
+      method: 'POST',
+      body: {
+        name: 'Applicant Student Cross-Sector',
+        email: testStudentEmail,
+        requested_role: 'teacher',
+        qualification: 'M.Sc. Physics',
+        notes: 'Also applying as faculty assistant'
+      }
+    });
+
+    assert.equal(res.status, 201);
+    assert.equal(res.data.success, true);
+    assert.equal(res.data.data.status, 'PENDING_ADMIN_REVIEW');
+    assert.equal(res.data.data.requested_role, 'teacher');
+  });
+
+  // 3. Public status check returns requests across all sectors
+  await t.test('3. Public status check returns current review status and multi-request array', async () => {
     const res = await api(`/api/requests/status?email=${encodeURIComponent(testStudentEmail)}`);
     assert.equal(res.status, 200);
     assert.equal(res.data.success, true);
-    assert.equal(res.data.data.status, 'PENDING_TEACHER_REVIEW');
-    assert.equal(res.data.data.class_name, 'Class 12');
+    assert.ok(Array.isArray(res.data.data.requests));
+    assert.equal(res.data.data.requests.length, 2);
+    assert.ok(res.data.data.status);
   });
 
   // 4. Student token cannot list or review requests
@@ -322,6 +343,38 @@ test('Multi-tier Account Onboarding & Verification Workflow Suite', async (t) =>
     const adminProfile = get('SELECT * FROM admin_profiles WHERE user_id = ?', [createdAdmin.id]);
     assert.ok(adminProfile);
     assert.ok(adminProfile.admin_id_number.startsWith('ADM-2027-'));
+  });
+
+  // 13. Multi-role session switching
+  await t.test('13. Multi-sector role switching works for Super Admin and multi-role profiles', async () => {
+    // Super admin switches to student sector
+    const switchRes = await api('/api/auth/switch-role', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${superAdminToken}` },
+      body: { role: 'student' }
+    });
+    assert.equal(switchRes.status, 200);
+    assert.equal(switchRes.data.success, true);
+    assert.equal(switchRes.data.active_role, 'student');
+    assert.ok(switchRes.data.available_roles.includes('super_admin'));
+    assert.ok(switchRes.data.available_roles.includes('student'));
+
+    // Switch back to super_admin
+    const switchBack = await api('/api/auth/switch-role', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${switchRes.data.token}` },
+      body: { role: 'super_admin' }
+    });
+    assert.equal(switchBack.status, 200);
+    assert.equal(switchBack.data.active_role, 'super_admin');
+
+    // Unauthorized role switch rejection
+    const unauthSwitch = await api('/api/auth/switch-role', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${studentToken}` },
+      body: { role: 'super_admin' }
+    });
+    assert.equal(unauthSwitch.status, 403);
   });
 
   // Cleanup test records

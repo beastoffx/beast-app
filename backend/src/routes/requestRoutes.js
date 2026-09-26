@@ -109,26 +109,43 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // Check if user already exists
-    const existingUser = await get('SELECT id, status, is_active FROM users WHERE email = ?', [cleanEmail]);
+    // Check if user already holds this specific requested role in active status
+    const existingUser = await get('SELECT id, role, status, is_active FROM users WHERE email = ?', [cleanEmail]);
     if (existingUser && existingUser.is_active && existingUser.status === 'active') {
-      return res.status(409).json({
-        success: false,
-        error: 'An active account already exists with this email address. Please sign in.'
-      });
+      let alreadyHasRole = existingUser.role === cleanRole;
+      if (!alreadyHasRole) {
+        if (cleanRole === 'student') {
+          const sp = await get('SELECT id FROM student_profiles WHERE user_id = ?', [existingUser.id]);
+          if (sp) alreadyHasRole = true;
+        } else if (cleanRole === 'teacher') {
+          const tp = await get('SELECT id FROM teacher_profiles WHERE user_id = ?', [existingUser.id]);
+          if (tp) alreadyHasRole = true;
+        } else if (cleanRole === 'admin') {
+          const ap = await get('SELECT id FROM admin_profiles WHERE user_id = ?', [existingUser.id]);
+          if (ap) alreadyHasRole = true;
+        }
+      }
+
+      if (alreadyHasRole) {
+        return res.status(409).json({
+          success: false,
+          error: `An active account already exists for ${cleanEmail} with role '${cleanRole}'. Please sign in directly.`
+        });
+      }
     }
 
-    // Check for pending request
+    // Check for pending request for the EXACT SAME requested role
     const pendingRequest = await get(
-      `SELECT id, status FROM account_requests 
-       WHERE email = ? AND status IN ('PENDING_TEACHER_REVIEW', 'PENDING_ADMIN_REVIEW', 'PENDING_SUPER_ADMIN_REVIEW')`,
-      [cleanEmail]
+      `SELECT id, status, requested_role FROM account_requests 
+       WHERE email = ? AND requested_role = ? AND status IN ('PENDING_TEACHER_REVIEW', 'PENDING_ADMIN_REVIEW', 'PENDING_SUPER_ADMIN_REVIEW')`,
+      [cleanEmail, cleanRole]
     );
     if (pendingRequest) {
       return res.status(409).json({
         success: false,
-        error: 'An onboarding request is already pending review for this email address.',
-        status: pendingRequest.status
+        error: `An onboarding application for role '${cleanRole}' is already pending review for this email address.`,
+        status: pendingRequest.status,
+        requestId: pendingRequest.id
       });
     }
 
@@ -221,34 +238,36 @@ router.get('/status', async (req, res) => {
       return res.status(400).json({ success: false, error: 'email or googleUid query parameter is required.' });
     }
 
-    let request = null;
+    let requests = [];
     if (email) {
-      request = await get(
+      requests = await query(
         `SELECT ar.*, c.name as class_name, b.name as batch_name, s.name as session_name
          FROM account_requests ar
          LEFT JOIN classes c ON ar.target_class_id = c.id
          LEFT JOIN batches b ON ar.target_batch_id = b.id
          LEFT JOIN academic_sessions s ON ar.target_session_id = s.id
          WHERE ar.email = ?
-         ORDER BY ar.created_at DESC LIMIT 1`,
+         ORDER BY ar.created_at DESC`,
         [email.trim().toLowerCase()]
       );
     } else if (googleUid) {
-      request = await get(
+      requests = await query(
         `SELECT ar.*, c.name as class_name, b.name as batch_name, s.name as session_name
          FROM account_requests ar
          LEFT JOIN classes c ON ar.target_class_id = c.id
          LEFT JOIN batches b ON ar.target_batch_id = b.id
          LEFT JOIN academic_sessions s ON ar.target_session_id = s.id
          WHERE ar.google_uid = ?
-         ORDER BY ar.created_at DESC LIMIT 1`,
+         ORDER BY ar.created_at DESC`,
         [googleUid.trim()]
       );
     }
 
+    const latest = requests[0] || null;
     res.json({
       success: true,
-      data: request || null
+      data: latest ? { ...latest, requests } : null,
+      requests
     });
   } catch (err) {
     console.error('[REQUEST_STATUS_ERROR]', err);
@@ -476,105 +495,111 @@ router.post('/:id/review', authenticateToken, authorizeRoles('teacher', 'admin',
       await transaction(async () => {
         const defaultPasswordHash = bcrypt.hashSync('BeastAcademy@2027', 10);
 
-        if (request.requested_role === 'student') {
-          generatedStudentId = await generateUniqueStudentId('2027');
-          createdUserId = `user-stu-${Date.now()}`;
-
-          // Create student user record
+        // Check if user already exists in users table (multi-sector account support)
+        const existingUser = await get('SELECT id, role, google_uid, phone FROM users WHERE email = ?', [request.email]);
+        if (existingUser) {
+          createdUserId = existingUser.id;
+          if (request.google_uid && (!existingUser.google_uid || existingUser.google_uid === '')) {
+            await run("UPDATE users SET google_uid = ?, updated_at = datetime('now') WHERE id = ?", [request.google_uid, existingUser.id]);
+          }
+          if (request.phone && (!existingUser.phone || existingUser.phone === '')) {
+            await run("UPDATE users SET phone = ?, updated_at = datetime('now') WHERE id = ?", [request.phone, existingUser.id]);
+          }
+          // Elevate primary role if gaining higher institutional responsibility
+          if (existingUser.role !== 'super_admin') {
+            if (request.requested_role === 'admin') {
+              await run("UPDATE users SET role = 'admin', updated_at = datetime('now') WHERE id = ?", [existingUser.id]);
+            } else if (request.requested_role === 'teacher' && existingUser.role === 'student') {
+              await run("UPDATE users SET role = 'teacher', updated_at = datetime('now') WHERE id = ?", [existingUser.id]);
+            }
+          }
+        } else {
+          // New user creation
+          createdUserId = `user-${request.requested_role.substring(0, 3)}-${Date.now()}`;
           await run(
             `INSERT INTO users (id, email, password_hash, role, name, phone, google_uid, status, is_active)
-             VALUES (?, ?, ?, 'student', ?, ?, ?, 'active', 1)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 1)`,
             [
               createdUserId,
               request.email,
               defaultPasswordHash,
+              request.requested_role,
               request.name,
               request.phone,
               request.google_uid || null
             ]
           );
+        }
 
-          // Create student profile
-          await run(
-            `INSERT INTO student_profiles (
-              id, user_id, student_id_number, class_id, batch_id, academic_session_id,
-              subscription_status, resource_permissions_json
-            ) VALUES (?, ?, ?, ?, ?, ?, 'paid', '{"materials": true, "doubts": true, "exams": true}')`,
-            [
-              `stu-prof-${Date.now()}`,
-              createdUserId,
-              generatedStudentId,
-              request.target_class_id,
-              request.target_batch_id,
-              request.target_session_id
-            ]
-          );
+        if (request.requested_role === 'student') {
+          generatedStudentId = await generateUniqueStudentId('2027');
 
-          // Create enrollment record
-          if (request.target_batch_id && request.target_session_id) {
+          // Check if student profile already exists
+          const existingProfile = await get('SELECT id FROM student_profiles WHERE user_id = ?', [createdUserId]);
+          if (!existingProfile) {
             await run(
-              `INSERT INTO enrollments (id, student_id, batch_id, academic_session_id, status)
-               VALUES (?, ?, ?, ?, 'active')`,
-              [`enr-${Date.now()}`, createdUserId, request.target_batch_id, request.target_session_id]
+              `INSERT INTO student_profiles (
+                id, user_id, student_id_number, class_id, batch_id, academic_session_id,
+                subscription_status, resource_permissions_json
+              ) VALUES (?, ?, ?, ?, ?, ?, 'paid', '{"materials": true, "doubts": true, "exams": true}')`,
+              [
+                `stu-prof-${Date.now()}`,
+                createdUserId,
+                generatedStudentId,
+                request.target_class_id,
+                request.target_batch_id,
+                request.target_session_id
+              ]
             );
+          }
+
+          // Create enrollment record if not already enrolled
+          if (request.target_batch_id && request.target_session_id) {
+            const existingEnrollment = await get(
+              'SELECT id FROM enrollments WHERE student_id = ? AND batch_id = ? AND academic_session_id = ?',
+              [createdUserId, request.target_batch_id, request.target_session_id]
+            );
+            if (!existingEnrollment) {
+              await run(
+                `INSERT INTO enrollments (id, student_id, batch_id, academic_session_id, status)
+                 VALUES (?, ?, ?, ?, 'active')`,
+                [`enr-${Date.now()}`, createdUserId, request.target_batch_id, request.target_session_id]
+              );
+            }
           }
         } else if (request.requested_role === 'teacher') {
           const employeeCode = await generateUniqueTeacherId('2027');
-          createdUserId = `user-tch-${Date.now()}`;
-
-          await run(
-            `INSERT INTO users (id, email, password_hash, role, name, phone, google_uid, status, is_active)
-             VALUES (?, ?, ?, 'teacher', ?, ?, ?, 'active', 1)`,
-            [
-              createdUserId,
-              request.email,
-              defaultPasswordHash,
-              request.name,
-              request.phone,
-              request.google_uid || null
-            ]
-          );
-
-          await run(
-            `INSERT INTO teacher_profiles (id, user_id, employee_code, qualification, bio, contact_number)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [
-              `tch-prof-${Date.now()}`,
-              createdUserId,
-              employeeCode,
-              request.qualification || 'Faculty Member',
-              request.notes || 'Institutional Faculty',
-              request.phone || null
-            ]
-          );
+          const existingProfile = await get('SELECT id FROM teacher_profiles WHERE user_id = ?', [createdUserId]);
+          if (!existingProfile) {
+            await run(
+              `INSERT INTO teacher_profiles (id, user_id, employee_code, qualification, bio, contact_number)
+               VALUES (?, ?, ?, ?, ?, ?)`,
+              [
+                `tch-prof-${Date.now()}`,
+                createdUserId,
+                employeeCode,
+                request.qualification || 'Faculty Member',
+                request.notes || 'Institutional Faculty',
+                request.phone || null
+              ]
+            );
+          }
         } else if (request.requested_role === 'admin') {
           const adminIdNumber = await generateUniqueAdminId('2027');
-          createdUserId = `user-adm-${Date.now()}`;
-
-          await run(
-            `INSERT INTO users (id, email, password_hash, role, name, phone, google_uid, status, is_active)
-             VALUES (?, ?, ?, 'admin', ?, ?, ?, 'active', 1)`,
-            [
-              createdUserId,
-              request.email,
-              defaultPasswordHash,
-              request.name,
-              request.phone,
-              request.google_uid || null
-            ]
-          );
-
-          await run(
-            `INSERT INTO admin_profiles (id, user_id, admin_id_number, designation, created_by, permissions_json)
-             VALUES (?, ?, ?, ?, ?, '{"students": true, "academics": true, "teachers": true}')`,
-            [
-              `adm-prof-${Date.now()}`,
-              createdUserId,
-              adminIdNumber,
-              request.department || 'Administrator',
-              reviewerId
-            ]
-          );
+          const existingProfile = await get('SELECT id FROM admin_profiles WHERE user_id = ?', [createdUserId]);
+          if (!existingProfile) {
+            await run(
+              `INSERT INTO admin_profiles (id, user_id, admin_id_number, designation, created_by, permissions_json)
+               VALUES (?, ?, ?, ?, ?, '{"students": true, "academics": true, "teachers": true}')`,
+              [
+                `adm-prof-${Date.now()}`,
+                createdUserId,
+                adminIdNumber,
+                request.department || 'Administrator',
+                reviewerId
+              ]
+            );
+          }
         }
 
         // Finalize account request record

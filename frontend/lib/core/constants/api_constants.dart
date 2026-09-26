@@ -58,6 +58,7 @@ class ApiConstants {
   static const String me = '/api/auth/me';
   static const String changePassword = '/api/auth/change-password';
   static const String recoverRequest = '/api/auth/recover-request';
+  static const String switchRole = '/api/auth/switch-role';
   static const String logout = '/api/auth/logout';
 
   static const String studentDashboard = '/api/dashboard/student';

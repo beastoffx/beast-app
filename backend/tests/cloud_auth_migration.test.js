@@ -61,13 +61,14 @@ test.before(async () => {
 
 test.after(async () => {
   if (server) {
+    if (server.closeAllConnections) server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));
   }
 });
 
 async function api(path, options = {}) {
   const url = `${baseUrl}${path}`;
-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  const headers = { 'Content-Type': 'application/json', 'Connection': 'close', ...(options.headers || {}) };
   const res = await fetch(url, {
     ...options,
     headers,
