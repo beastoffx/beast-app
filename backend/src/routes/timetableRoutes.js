@@ -7,7 +7,7 @@ const { logAudit } = require('../middleware/audit');
 const router = express.Router();
 
 // GET /api/timetable/my - Personalized for logged-in Student or Teacher
-router.get('/my', authenticateToken, (req, res) => {
+router.get('/my', authenticateToken, async (req, res) => {
   const user = req.user;
   let sql = '';
   let params = [];
@@ -64,7 +64,7 @@ router.get('/my', authenticateToken, (req, res) => {
     params = [];
   }
 
-  const schedule = query(sql, params);
+  const schedule = await query(sql, params);
 
   // Calculate "Today", "Next Class", "This Week"
   // JS Day of week: 0 is Sun, 1 is Mon, 6 is Sat -> ISO Day: 1 is Mon, 7 is Sun
@@ -88,9 +88,9 @@ router.get('/my', authenticateToken, (req, res) => {
 });
 
 // GET /api/timetable/batch/:batchId
-router.get('/batch/:batchId', authenticateToken, (req, res) => {
+router.get('/batch/:batchId', authenticateToken, async (req, res) => {
   const { batchId } = req.params;
-  const slots = query(
+  const slots = await query(
     `SELECT t.*, s.name as subject_name, s.code as subject_code,
             u.name as teacher_name, b.name as batch_name
      FROM timetables t
@@ -105,7 +105,7 @@ router.get('/batch/:batchId', authenticateToken, (req, res) => {
 });
 
 // POST /api/timetable - Admin adds schedule slot with collision detection
-router.post('/', authenticateToken, authorizeRoles('admin'), (req, res) => {
+router.post('/', authenticateToken, authorizeRoles('admin'), async (req, res) => {
   const { batch_id, subject_id, teacher_id, day_of_week, start_time, end_time, room_number } = req.body;
 
   if (!batch_id || !subject_id || !teacher_id || !day_of_week || !start_time || !end_time) {
@@ -113,7 +113,7 @@ router.post('/', authenticateToken, authorizeRoles('admin'), (req, res) => {
   }
 
   // 1. Double-booking check: Teacher collision
-  const teacherConflict = get(
+  const teacherConflict = await get(
     `SELECT t.*, b.name as batch_name FROM timetables t
      JOIN batches b ON t.batch_id = b.id
      WHERE t.teacher_id = ? AND t.day_of_week = ?
@@ -128,7 +128,7 @@ router.post('/', authenticateToken, authorizeRoles('admin'), (req, res) => {
   }
 
   // 2. Double-booking check: Batch collision
-  const batchConflict = get(
+  const batchConflict = await get(
     `SELECT t.*, s.name as subject_name FROM timetables t
      JOIN subjects s ON t.subject_id = s.id
      WHERE t.batch_id = ? AND t.day_of_week = ?
@@ -143,21 +143,21 @@ router.post('/', authenticateToken, authorizeRoles('admin'), (req, res) => {
   }
 
   const id = 'tt-' + Date.now();
-  run(
+  await run(
     `INSERT INTO timetables (id, batch_id, subject_id, teacher_id, day_of_week, start_time, end_time, room_number)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, batch_id, subject_id, teacher_id, day_of_week, start_time, end_time, room_number || 'Hall 1']
   );
 
-  logAudit(req.user.id, 'CREATE_TIMETABLE_SLOT', 'timetables', id, { batch_id, subject_id, teacher_id, day_of_week, start_time }, req);
+  await logAudit(req.user.id, 'CREATE_TIMETABLE_SLOT', 'timetables', id, { batch_id, subject_id, teacher_id, day_of_week, start_time }, req);
   res.json({ success: true, message: 'Class scheduled successfully.', id });
 });
 
 // DELETE /api/timetable/:id
-router.delete('/:id', authenticateToken, authorizeRoles('admin'), (req, res) => {
+router.delete('/:id', authenticateToken, authorizeRoles('admin'), async (req, res) => {
   const { id } = req.params;
-  run('DELETE FROM timetables WHERE id = ?', [id]);
-  logAudit(req.user.id, 'DELETE_TIMETABLE_SLOT', 'timetables', id, {}, req);
+  await run('DELETE FROM timetables WHERE id = ?', [id]);
+  await logAudit(req.user.id, 'DELETE_TIMETABLE_SLOT', 'timetables', id, {}, req);
   res.json({ success: true, message: 'Timetable slot deleted.' });
 });
 

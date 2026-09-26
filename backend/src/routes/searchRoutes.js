@@ -5,7 +5,7 @@ const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
 // GET /api/search?q=...
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   const queryText = (req.query.q || '').trim();
   if (!queryText || queryText.length < 2) {
     return res.json({
@@ -25,7 +25,7 @@ router.get('/', authenticateToken, (req, res) => {
   const searchPattern = `%${queryText}%`;
 
   // 1. Subjects (visible to all)
-  const subjects = query(
+  const subjects = await query(
     `SELECT s.id, s.name, s.code, c.name as class_name
      FROM subjects s
      JOIN classes c ON s.class_id = c.id
@@ -37,7 +37,7 @@ router.get('/', authenticateToken, (req, res) => {
   // 2. Notices (role-filtered)
   let notices = [];
   if (user.role === 'student') {
-    notices = query(
+    notices = await query(
       `SELECT id, title, category, priority, publish_date
        FROM notices
        WHERE (title LIKE ? OR description LIKE ?)
@@ -46,7 +46,7 @@ router.get('/', authenticateToken, (req, res) => {
       [searchPattern, searchPattern, user.id]
     );
   } else {
-    notices = query(
+    notices = await query(
       `SELECT id, title, category, priority, publish_date
        FROM notices
        WHERE title LIKE ? OR description LIKE ?
@@ -58,7 +58,7 @@ router.get('/', authenticateToken, (req, res) => {
   // 3. Materials (role-filtered)
   let materials = [];
   if (user.role === 'student') {
-    materials = query(
+    materials = await query(
       `SELECT m.id, m.title, m.chapter, s.name as subject_name
        FROM study_materials m
        JOIN subjects s ON m.subject_id = s.id
@@ -68,7 +68,7 @@ router.get('/', authenticateToken, (req, res) => {
       [searchPattern, searchPattern, user.id]
     );
   } else {
-    materials = query(
+    materials = await query(
       `SELECT m.id, m.title, m.chapter, s.name as subject_name
        FROM study_materials m
        JOIN subjects s ON m.subject_id = s.id
@@ -81,7 +81,7 @@ router.get('/', authenticateToken, (req, res) => {
   // 4. Assignments (role-filtered)
   let assignments = [];
   if (user.role === 'student') {
-    assignments = query(
+    assignments = await query(
       `SELECT a.id, a.title, a.deadline, s.name as subject_name
        FROM assignments a
        JOIN subjects s ON a.subject_id = s.id
@@ -91,7 +91,7 @@ router.get('/', authenticateToken, (req, res) => {
       [searchPattern, searchPattern, user.id]
     );
   } else {
-    assignments = query(
+    assignments = await query(
       `SELECT a.id, a.title, a.deadline, s.name as subject_name
        FROM assignments a
        JOIN subjects s ON a.subject_id = s.id
@@ -104,7 +104,7 @@ router.get('/', authenticateToken, (req, res) => {
   // 5. Doubts (Strict privacy: student ONLY sees their own doubts; teacher/admin sees doubts they teach)
   let doubts = [];
   if (user.role === 'student') {
-    doubts = query(
+    doubts = await query(
       `SELECT d.id, d.title, d.status, s.name as subject_name
        FROM doubts d
        JOIN subjects s ON d.subject_id = s.id
@@ -113,7 +113,7 @@ router.get('/', authenticateToken, (req, res) => {
       [user.id, searchPattern, searchPattern]
     );
   } else if (user.role === 'teacher') {
-    doubts = query(
+    doubts = await query(
       `SELECT d.id, d.title, d.status, s.name as subject_name
        FROM doubts d
        JOIN subjects s ON d.subject_id = s.id
@@ -123,7 +123,7 @@ router.get('/', authenticateToken, (req, res) => {
       [searchPattern, searchPattern, user.id]
     );
   } else {
-    doubts = query(
+    doubts = await query(
       `SELECT d.id, d.title, d.status, s.name as subject_name
        FROM doubts d
        JOIN subjects s ON d.subject_id = s.id
@@ -136,7 +136,7 @@ router.get('/', authenticateToken, (req, res) => {
   // 6. Students (strictly Admin & Teacher only; students can NEVER search other students)
   let students = [];
   if (user.role === 'admin' || user.role === 'teacher') {
-    students = query(
+    students = await query(
       `SELECT u.id, u.name, u.email, sp.student_id_number, b.name as batch_name
        FROM users u
        JOIN student_profiles sp ON u.id = sp.user_id

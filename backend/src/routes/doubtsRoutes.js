@@ -9,7 +9,7 @@ const { StorageService } = require('../services/storageService');
 const router = express.Router();
 
 // GET /api/doubts/my - Student views their doubts
-router.get('/my', authenticateToken, authorizeRoles('student'), (req, res) => {
+router.get('/my', authenticateToken, authorizeRoles('student'), async (req, res) => {
   const { status } = req.query;
   let sql = `
     SELECT d.*, s.name as subject_name, s.code as subject_code,
@@ -26,7 +26,7 @@ router.get('/my', authenticateToken, authorizeRoles('student'), (req, res) => {
   }
 
   sql += ' ORDER BY d.created_at DESC';
-  const doubts = query(sql, params);
+  const doubts = await query(sql, params);
 
   // Group into open vs resolved
   const openDoubts = doubts.filter(d => d.status !== 'resolved');
@@ -43,7 +43,7 @@ router.get('/my', authenticateToken, authorizeRoles('student'), (req, res) => {
 });
 
 // GET /api/doubts/assigned - Teacher views doubts for their subjects/batches
-router.get('/assigned', authenticateToken, authorizeRoles('teacher', 'admin'), (req, res) => {
+router.get('/assigned', authenticateToken, authorizeRoles('teacher', 'admin'), async (req, res) => {
   let sql = '';
   let params = [];
 
@@ -75,15 +75,15 @@ router.get('/assigned', authenticateToken, authorizeRoles('teacher', 'admin'), (
     `;
   }
 
-  const doubts = query(sql, params);
+  const doubts = await query(sql, params);
   res.json({ success: true, data: doubts });
 });
 
 // GET /api/doubts/:id - View single doubt with complete discussion thread
-router.get('/:id', authenticateToken, (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
 
-  const doubt = get(
+  const doubt = await get(
     `SELECT d.*, s.name as subject_name, s.code as subject_code,
             u.name as student_name, u.email as student_email, b.name as batch_name
      FROM doubts d
@@ -105,12 +105,12 @@ router.get('/:id', authenticateToken, (req, res) => {
 
   // If teacher opens an 'open' doubt, mark status as 'seen'
   if (req.user.role === 'teacher' && doubt.status === 'open') {
-    run(`UPDATE doubts SET status = 'seen', updated_at = datetime('now') WHERE id = ?`, [id]);
+    await run(`UPDATE doubts SET status = 'seen', updated_at = datetime('now') WHERE id = ?`, [id]);
     doubt.status = 'seen';
   }
 
   // Fetch all discussion responses
-  const responses = query(
+  const responses = await query(
     `SELECT dr.*, u.name as author_name, u.role as author_role, u.avatar_url
      FROM doubt_responses dr
      JOIN users u ON dr.author_id = u.id
@@ -129,7 +129,7 @@ router.get('/:id', authenticateToken, (req, res) => {
 });
 
 // POST /api/doubts - Student creates a doubt (Capture photo/gallery/text)
-router.post('/', authenticateToken, authorizeRoles('student'), upload.single('image'), (req, res) => {
+router.post('/', authenticateToken, authorizeRoles('student'), upload.single('image'), async (req, res) => {
   const { subject_id, title, topic, note, priority } = req.body;
   const studentId = req.user.id;
 
@@ -138,24 +138,24 @@ router.post('/', authenticateToken, authorizeRoles('student'), upload.single('im
   }
 
   // Get student's enrolled batch
-  const profile = get('SELECT batch_id FROM student_profiles WHERE user_id = ?', [studentId]);
+  const profile = await get('SELECT batch_id FROM student_profiles WHERE user_id = ?', [studentId]);
   const batchId = profile ? profile.batch_id : null;
 
   const imageUrl = req.file ? `/uploads/doubts/${req.file.filename}` : (req.body.image_url || null);
   const doubtId = 'doubt-' + Date.now();
 
-  run(
+  await run(
     `INSERT INTO doubts (id, student_id, subject_id, batch_id, title, topic, note, image_url, status, priority)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
     [doubtId, studentId, subject_id, batchId, title, topic || '', note, imageUrl, priority || 'normal']
   );
 
-  logAudit(studentId, 'CREATE_DOUBT', 'doubts', doubtId, { subject_id, title }, req);
+  await logAudit(studentId, 'CREATE_DOUBT', 'doubts', doubtId, { subject_id, title }, req);
   res.json({ success: true, message: 'Doubt recorded and shared with your faculty.', id: doubtId });
 });
 
 // POST /api/doubts/:id/respond - Teacher or Student adds a response
-router.post('/:id/respond', authenticateToken, upload.single('attachment'), (req, res) => {
+router.post('/:id/respond', authenticateToken, upload.single('attachment'), async (req, res) => {
   const { id } = req.params;
   const { message } = req.body;
 
@@ -163,7 +163,7 @@ router.post('/:id/respond', authenticateToken, upload.single('attachment'), (req
     return res.status(400).json({ success: false, error: 'Message cannot be empty.' });
   }
 
-  const doubt = get('SELECT * FROM doubts WHERE id = ?', [id]);
+  const doubt = await get('SELECT * FROM doubts WHERE id = ?', [id]);
   if (!doubt) {
     return res.status(404).json({ success: false, error: 'Doubt not found.' });
   }
@@ -171,8 +171,8 @@ router.post('/:id/respond', authenticateToken, upload.single('attachment'), (req
   const attachmentUrl = req.file ? `/uploads/doubts/${req.file.filename}` : (req.body.attachment_url || null);
   const respId = 'dr-' + Date.now();
 
-  transaction(() => {
-    run(
+  await transaction(async () => {
+    await run(
       `INSERT INTO doubt_responses (id, doubt_id, author_id, role, message, attachment_url)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [respId, id, req.user.id, req.user.role, message, attachmentUrl]
@@ -180,11 +180,11 @@ router.post('/:id/respond', authenticateToken, upload.single('attachment'), (req
 
     // Update doubt status
     if (req.user.role === 'teacher') {
-      run(`UPDATE doubts SET status = 'answered', updated_at = datetime('now') WHERE id = ?`, [id]);
+      await run(`UPDATE doubts SET status = 'answered', updated_at = datetime('now') WHERE id = ?`, [id]);
 
       // Create notification for student
       const notifId = 'notif-' + Date.now();
-      run(
+      await run(
         `INSERT INTO notifications (id, user_id, title, message, type, reference_id)
          VALUES (?, ?, ?, ?, 'doubt', ?)`,
         [
@@ -196,28 +196,28 @@ router.post('/:id/respond', authenticateToken, upload.single('attachment'), (req
         ]
       );
     } else if (req.user.role === 'student' && doubt.status === 'answered') {
-      run(`UPDATE doubts SET status = 'in_discussion', updated_at = datetime('now') WHERE id = ?`, [id]);
+      await run(`UPDATE doubts SET status = 'in_discussion', updated_at = datetime('now') WHERE id = ?`, [id]);
     }
   });
 
-  logAudit(req.user.id, 'RESPOND_TO_DOUBT', 'doubts', id, {}, req);
+  await logAudit(req.user.id, 'RESPOND_TO_DOUBT', 'doubts', id, {}, req);
   res.json({ success: true, message: 'Response added to discussion thread.', id: respId });
 });
 
 // PUT /api/doubts/:id/resolve - Student marks doubt resolved or still unclear
-router.put('/:id/resolve', authenticateToken, authorizeRoles('student'), (req, res) => {
+router.put('/:id/resolve', authenticateToken, authorizeRoles('student'), async (req, res) => {
   const { id } = req.params;
   const { is_resolved } = req.body;
 
-  const doubt = get('SELECT * FROM doubts WHERE id = ? AND student_id = ?', [id, req.user.id]);
+  const doubt = await get('SELECT * FROM doubts WHERE id = ? AND student_id = ?', [id, req.user.id]);
   if (!doubt) {
     return res.status(404).json({ success: false, error: 'Doubt not found or not owned by you.' });
   }
 
   const newStatus = is_resolved ? 'resolved' : 'in_discussion';
-  run(`UPDATE doubts SET status = ?, updated_at = datetime('now') WHERE id = ?`, [newStatus, id]);
+  await run(`UPDATE doubts SET status = ?, updated_at = datetime('now') WHERE id = ?`, [newStatus, id]);
 
-  logAudit(req.user.id, 'RESOLVE_DOUBT', 'doubts', id, { newStatus }, req);
+  await logAudit(req.user.id, 'RESOLVE_DOUBT', 'doubts', id, { newStatus }, req);
   res.json({
     success: true,
     message: is_resolved ? 'Doubt marked as resolved! Great job.' : 'Doubt marked as still unclear. Discussion reopened.'
@@ -227,14 +227,14 @@ router.put('/:id/resolve', authenticateToken, authorizeRoles('student'), (req, r
 // GET /api/doubts/:id/image-url - Authorized private image access
 router.get('/:id/image-url', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const doubt = get('SELECT id, student_id, image_url, subject_id, batch_id FROM doubts WHERE id = ?', [id]);
+  const doubt = await get('SELECT id, student_id, image_url, subject_id, batch_id FROM doubts WHERE id = ?', [id]);
   if (!doubt || !doubt.image_url) {
     return res.status(404).json({ success: false, error: 'Doubt image not found.' });
   }
 
   // If student, check that user is owner or enrolled in the same batch
   if (req.user.role === 'student' && doubt.student_id !== req.user.id) {
-    const studentProfile = get('SELECT batch_id FROM student_profiles WHERE user_id = ?', [req.user.id]);
+    const studentProfile = await get('SELECT batch_id FROM student_profiles WHERE user_id = ?', [req.user.id]);
     if (!studentProfile || (doubt.batch_id && studentProfile.batch_id !== doubt.batch_id)) {
       return res.status(403).json({ success: false, error: 'You are not authorized to access this private doubt asset.' });
     }

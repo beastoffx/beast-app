@@ -6,7 +6,7 @@ const { authorizeRoles } = require('../middleware/rbac');
 const router = express.Router();
 
 // GET /api/audit-logs - Admin views audit trail
-router.get('/', authenticateToken, authorizeRoles('admin'), (req, res) => {
+router.get('/', authenticateToken, authorizeRoles('admin'), async (req, res) => {
   const { limit = 50, entity_type } = req.query;
   let sql = `
     SELECT a.*, u.name as user_name, u.email as user_email, u.role as user_role
@@ -23,7 +23,7 @@ router.get('/', authenticateToken, authorizeRoles('admin'), (req, res) => {
   sql += ' ORDER BY a.created_at DESC LIMIT ?';
   params.push(parseInt(limit, 10));
 
-  const logs = query(sql, params);
+  const logs = await query(sql, params);
   res.json({ success: true, data: logs });
 });
 

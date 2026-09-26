@@ -7,7 +7,7 @@ const { logAudit } = require('../middleware/audit');
 const router = express.Router();
 
 // POST /api/attendance/batch - Teacher or Admin records attendance for a batch & subject on a date
-router.post('/batch', authenticateToken, authorizeRoles('teacher', 'admin'), (req, res) => {
+router.post('/batch', authenticateToken, authorizeRoles('teacher', 'admin'), async (req, res) => {
   const { batch_id, subject_id, date, records } = req.body;
   // records: Array of { student_id, status: 'present'|'absent'|'late'|'excused', remarks: '' }
 
@@ -20,7 +20,7 @@ router.post('/batch', authenticateToken, authorizeRoles('teacher', 'admin'), (re
 
   // Teacher authorization check: verify teacher is assigned to this batch & subject (unless admin)
   if (req.user.role === 'teacher') {
-    const isAssigned = get(
+    const isAssigned = await get(
       'SELECT id FROM teacher_assignments WHERE teacher_id = ? AND batch_id = ? AND subject_id = ?',
       [req.user.id, batch_id, subject_id]
     );
@@ -32,15 +32,15 @@ router.post('/batch', authenticateToken, authorizeRoles('teacher', 'admin'), (re
     }
   }
 
-  transaction(() => {
-    records.forEach(rec => {
-      const existing = get(
+  await transaction(async () => {
+    for (const rec of records) {
+      const existing = await get(
         'SELECT id FROM attendance WHERE batch_id = ? AND subject_id = ? AND student_id = ? AND date = ?',
         [batch_id, subject_id, rec.student_id, date]
       );
 
       if (existing) {
-        run(
+        await run(
           `UPDATE attendance
            SET status = ?, remarks = ?, marked_by = ?, updated_at = datetime('now')
            WHERE id = ?`,
@@ -48,16 +48,16 @@ router.post('/batch', authenticateToken, authorizeRoles('teacher', 'admin'), (re
         );
       } else {
         const id = 'att-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
-        run(
+        await run(
           `INSERT INTO attendance (id, batch_id, subject_id, student_id, date, status, marked_by, remarks)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [id, batch_id, subject_id, rec.student_id, date, rec.status, req.user.id, rec.remarks || null]
         );
       }
-    });
+    }
   });
 
-  logAudit(req.user.id, 'RECORD_ATTENDANCE', 'attendance', batch_id, { subject_id, date, count: records.length }, req);
+  await logAudit(req.user.id, 'RECORD_ATTENDANCE', 'attendance', batch_id, { subject_id, date, count: records.length }, req);
 
   res.json({
     success: true,
@@ -66,7 +66,7 @@ router.post('/batch', authenticateToken, authorizeRoles('teacher', 'admin'), (re
 });
 
 // GET /api/attendance/batch/:batchId - Get attendance sheet for a batch, subject, date
-router.get('/batch/:batchId', authenticateToken, authorizeRoles('teacher', 'admin'), (req, res) => {
+router.get('/batch/:batchId', authenticateToken, authorizeRoles('teacher', 'admin'), async (req, res) => {
   const { batchId } = req.params;
   const { date, subject_id } = req.query;
 
@@ -75,7 +75,7 @@ router.get('/batch/:batchId', authenticateToken, authorizeRoles('teacher', 'admi
   }
 
   // Fetch all enrolled students in the batch
-  const students = query(
+  const students = await query(
     `SELECT u.id as student_id, u.name as student_name, sp.student_id_number,
             a.id as attendance_id, a.status, a.remarks
      FROM enrollments e
@@ -94,11 +94,11 @@ router.get('/batch/:batchId', authenticateToken, authorizeRoles('teacher', 'admi
 });
 
 // GET /api/attendance/my - Student views their personal attendance summary & history
-router.get('/my', authenticateToken, authorizeRoles('student'), (req, res) => {
+router.get('/my', authenticateToken, authorizeRoles('student'), async (req, res) => {
   const studentId = req.user.id;
 
   // Overall attendance statistics
-  const stats = get(
+  const stats = await get(
     `SELECT
        COUNT(*) as total_classes,
        SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present_count,
@@ -115,7 +115,7 @@ router.get('/my', authenticateToken, authorizeRoles('student'), (req, res) => {
   const overallPercentage = totalClasses > 0 ? Math.round((presentCount / totalClasses) * 1000) / 10 : 0.0;
 
   // Subject-wise attendance
-  const subjectStats = query(
+  const subjectStats = await query(
     `SELECT s.id as subject_id, s.name as subject_name, s.code as subject_code,
             COUNT(*) as total_classes,
             SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END) as present_count,
@@ -136,7 +136,7 @@ router.get('/my', authenticateToken, authorizeRoles('student'), (req, res) => {
   });
 
   // Recent 10 attendance records
-  const recentRecords = query(
+  const recentRecords = await query(
     `SELECT a.*, s.name as subject_name, u.name as marked_by_name
      FROM attendance a
      JOIN subjects s ON a.subject_id = s.id
@@ -162,8 +162,8 @@ router.get('/my', authenticateToken, authorizeRoles('student'), (req, res) => {
 });
 
 // GET /api/attendance/summary - Admin institution-wide attendance summary
-router.get('/summary', authenticateToken, authorizeRoles('admin'), (req, res) => {
-  const summary = query(
+router.get('/summary', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+  const summary = await query(
     `SELECT b.id as batch_id, b.name as batch_name, c.name as class_name,
             COUNT(a.id) as total_marks,
             SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END) as present_count,

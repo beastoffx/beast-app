@@ -9,7 +9,7 @@ const { StorageService } = require('../services/storageService');
 const router = express.Router();
 
 // GET /api/materials - Filter by subject, chapter, class, batch
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   const { subject_id, chapter, class_id, batch_id } = req.query;
   const user = req.user;
 
@@ -50,12 +50,12 @@ router.get('/', authenticateToken, (req, res) => {
 
   sql += ` ORDER BY m.created_at DESC`;
 
-  const materials = query(sql, params);
+  const materials = await query(sql, params);
   res.json({ success: true, data: materials });
 });
 
 // POST /api/materials - Teacher or Admin uploads material
-router.post('/', authenticateToken, authorizeRoles('teacher', 'admin'), upload.single('file'), (req, res) => {
+router.post('/', authenticateToken, authorizeRoles('teacher', 'admin'), upload.single('file'), async (req, res) => {
   const { title, description, subject_id, class_id, batch_id, chapter, file_url } = req.body;
 
   if (!title || !subject_id || !class_id) {
@@ -75,7 +75,7 @@ router.post('/', authenticateToken, authorizeRoles('teacher', 'admin'), upload.s
   }
 
   const id = 'mat-' + Date.now();
-  run(
+  await run(
     `INSERT INTO study_materials (id, title, description, file_url, file_type, file_size, subject_id, batch_id, class_id, chapter, teacher_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
@@ -93,14 +93,14 @@ router.post('/', authenticateToken, authorizeRoles('teacher', 'admin'), upload.s
     ]
   );
 
-  logAudit(req.user.id, 'UPLOAD_STUDY_MATERIAL', 'study_materials', id, { title, subject_id, class_id }, req);
+  await logAudit(req.user.id, 'UPLOAD_STUDY_MATERIAL', 'study_materials', id, { title, subject_id, class_id }, req);
   res.json({ success: true, message: 'Study material uploaded successfully.', id });
 });
 
 // DELETE /api/materials/:id - Teacher or Admin deletes material
-router.delete('/:id', authenticateToken, authorizeRoles('teacher', 'admin'), (req, res) => {
+router.delete('/:id', authenticateToken, authorizeRoles('teacher', 'admin'), async (req, res) => {
   const { id } = req.params;
-  const material = get('SELECT * FROM study_materials WHERE id = ?', [id]);
+  const material = await get('SELECT * FROM study_materials WHERE id = ?', [id]);
   if (!material) {
     return res.status(404).json({ success: false, error: 'Material not found.' });
   }
@@ -110,15 +110,15 @@ router.delete('/:id', authenticateToken, authorizeRoles('teacher', 'admin'), (re
     return res.status(403).json({ success: false, error: 'You are not authorized to delete another teacher\'s material.' });
   }
 
-  run('DELETE FROM study_materials WHERE id = ?', [id]);
-  logAudit(req.user.id, 'DELETE_STUDY_MATERIAL', 'study_materials', id, {}, req);
+  await run('DELETE FROM study_materials WHERE id = ?', [id]);
+  await logAudit(req.user.id, 'DELETE_STUDY_MATERIAL', 'study_materials', id, {}, req);
   res.json({ success: true, message: 'Material deleted successfully.' });
 });
 
 // GET /api/materials/:id/download-url - Authorized private file access
 router.get('/:id/download-url', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const material = get('SELECT * FROM study_materials WHERE id = ?', [id]);
+  const material = await get('SELECT * FROM study_materials WHERE id = ?', [id]);
   if (!material) {
     return res.status(404).json({ success: false, error: 'Material not found.' });
   }
@@ -142,7 +142,7 @@ router.get('/:id/download-url', authenticateToken, async (req, res) => {
     }
 
     // 3. Academic scope verification (must belong to this class or batch)
-    const studentProfile = get('SELECT class_id, batch_id FROM student_profiles WHERE user_id = ?', [req.user.id]);
+    const studentProfile = await get('SELECT class_id, batch_id FROM student_profiles WHERE user_id = ?', [req.user.id]);
     if (studentProfile) {
       if (material.batch_id && studentProfile.batch_id && material.batch_id !== studentProfile.batch_id) {
         return res.status(403).json({

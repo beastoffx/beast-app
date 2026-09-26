@@ -17,10 +17,10 @@ function calculateGrade(percentage) {
 }
 
 // GET /api/results/my - Student sees their own published results
-router.get('/my', authenticateToken, authorizeRoles('student'), (req, res) => {
+router.get('/my', authenticateToken, authorizeRoles('student'), async (req, res) => {
   const studentId = req.user.id;
 
-  const results = query(
+  const results = await query(
     `SELECT r.*, es.exam_date, es.passing_marks,
             e.title as exam_title, e.exam_type,
             s.name as subject_name, s.code as subject_code,
@@ -62,10 +62,10 @@ router.get('/my', authenticateToken, authorizeRoles('student'), (req, res) => {
 });
 
 // GET /api/results/exam-subject/:examSubjectId - Teacher/Admin views results sheet
-router.get('/exam-subject/:examSubjectId', authenticateToken, authorizeRoles('teacher', 'admin'), (req, res) => {
+router.get('/exam-subject/:examSubjectId', authenticateToken, authorizeRoles('teacher', 'admin'), async (req, res) => {
   const { examSubjectId } = req.params;
 
-  const subjectInfo = get(
+  const subjectInfo = await get(
     `SELECT es.*, s.name as subject_name, s.code as subject_code, e.title as exam_title, e.batch_id
      FROM exam_subjects es
      JOIN subjects s ON es.subject_id = s.id
@@ -79,7 +79,7 @@ router.get('/exam-subject/:examSubjectId', authenticateToken, authorizeRoles('te
   }
 
   // Fetch all students in the batch and any results entered
-  const rows = query(
+  const rows = await query(
     `SELECT u.id as student_id, u.name as student_name, sp.student_id_number,
             r.id as result_id, r.marks_obtained, r.max_marks, r.percentage, r.grade, r.feedback
      FROM enrollments en
@@ -101,7 +101,7 @@ router.get('/exam-subject/:examSubjectId', authenticateToken, authorizeRoles('te
 });
 
 // POST /api/results/batch - Teacher/Admin enters or updates marks for multiple students
-router.post('/batch', authenticateToken, authorizeRoles('teacher', 'admin'), (req, res) => {
+router.post('/batch', authenticateToken, authorizeRoles('teacher', 'admin'), async (req, res) => {
   const { exam_subject_id, marks_data } = req.body;
   // marks_data: Array of { student_id, marks_obtained, max_marks, feedback }
 
@@ -109,20 +109,20 @@ router.post('/batch', authenticateToken, authorizeRoles('teacher', 'admin'), (re
     return res.status(400).json({ success: false, error: 'Exam subject and marks array are required.' });
   }
 
-  transaction(() => {
-    marks_data.forEach(item => {
+  await transaction(async () => {
+    for (const item of marks_data) {
       const maxMarks = item.max_marks || 100;
       const obtained = parseFloat(item.marks_obtained);
       const percentage = Math.round((obtained / maxMarks) * 1000) / 10;
       const grade = calculateGrade(percentage);
 
-      const existing = get(
+      const existing = await get(
         'SELECT id FROM results WHERE exam_subject_id = ? AND student_id = ?',
         [exam_subject_id, item.student_id]
       );
 
       if (existing) {
-        run(
+        await run(
           `UPDATE results
            SET marks_obtained = ?, max_marks = ?, percentage = ?, grade = ?, feedback = ?,
                entered_by = ?, updated_at = datetime('now')
@@ -131,16 +131,16 @@ router.post('/batch', authenticateToken, authorizeRoles('teacher', 'admin'), (re
         );
       } else {
         const id = 'res-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
-        run(
+        await run(
           `INSERT INTO results (id, exam_subject_id, student_id, marks_obtained, max_marks, percentage, grade, feedback, entered_by)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [id, exam_subject_id, item.student_id, obtained, maxMarks, percentage, grade, item.feedback || '', req.user.id]
         );
       }
-    });
+    }
   });
 
-  logAudit(req.user.id, 'ENTER_EXAM_RESULTS', 'results', exam_subject_id, { count: marks_data.length }, req);
+  await logAudit(req.user.id, 'ENTER_EXAM_RESULTS', 'results', exam_subject_id, { count: marks_data.length }, req);
   res.json({ success: true, message: `Results for ${marks_data.length} students recorded successfully.` });
 });
 

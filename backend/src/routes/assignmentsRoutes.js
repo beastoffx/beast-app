@@ -8,12 +8,12 @@ const upload = require('../middleware/upload');
 const router = express.Router();
 
 // GET /api/assignments/my - Student or Teacher assignments
-router.get('/my', authenticateToken, (req, res) => {
+router.get('/my', authenticateToken, async (req, res) => {
   const user = req.user;
 
   if (user.role === 'student') {
     // Student sees assignments for their enrolled batch with submission status
-    const assignments = query(
+    const assignments = await query(
       `SELECT a.*, s.name as subject_name, s.code as subject_code,
               u.name as teacher_name,
               sub.id as submission_id, sub.status as submission_status,
@@ -32,7 +32,7 @@ router.get('/my', authenticateToken, (req, res) => {
 
   if (user.role === 'teacher') {
     // Teacher sees assignments they created with submission statistics
-    const assignments = query(
+    const assignments = await query(
       `SELECT a.*, s.name as subject_name, s.code as subject_code, b.name as batch_name,
               (SELECT COUNT(*) FROM assignment_submissions WHERE assignment_id = a.id) as total_submissions,
               (SELECT COUNT(*) FROM assignment_submissions WHERE assignment_id = a.id AND status = 'reviewed') as reviewed_submissions,
@@ -49,7 +49,7 @@ router.get('/my', authenticateToken, (req, res) => {
   }
 
   // Admin sees all assignments
-  const assignments = query(
+  const assignments = await query(
     `SELECT a.*, s.name as subject_name, b.name as batch_name, u.name as teacher_name,
             (SELECT COUNT(*) FROM assignment_submissions WHERE assignment_id = a.id) as total_submissions
      FROM assignments a
@@ -62,7 +62,7 @@ router.get('/my', authenticateToken, (req, res) => {
 });
 
 // POST /api/assignments - Teacher or Admin creates an assignment
-router.post('/', authenticateToken, authorizeRoles('teacher', 'admin'), upload.single('attachment'), (req, res) => {
+router.post('/', authenticateToken, authorizeRoles('teacher', 'admin'), upload.single('attachment'), async (req, res) => {
   const { title, subject_id, batch_id, description, deadline, max_marks, instructions } = req.body;
 
   if (!title || !subject_id || !batch_id || !deadline) {
@@ -72,7 +72,7 @@ router.post('/', authenticateToken, authorizeRoles('teacher', 'admin'), upload.s
   const id = 'assign-' + Date.now();
   const attachmentUrl = req.file ? `/uploads/submissions/${req.file.filename}` : (req.body.attachment_url || null);
 
-  run(
+  await run(
     `INSERT INTO assignments (id, title, subject_id, batch_id, teacher_id, description, deadline, max_marks, attachment_url, instructions)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
@@ -89,17 +89,17 @@ router.post('/', authenticateToken, authorizeRoles('teacher', 'admin'), upload.s
     ]
   );
 
-  logAudit(req.user.id, 'CREATE_ASSIGNMENT', 'assignments', id, { title, batch_id, subject_id }, req);
+  await logAudit(req.user.id, 'CREATE_ASSIGNMENT', 'assignments', id, { title, batch_id, subject_id }, req);
   res.json({ success: true, message: 'Assignment created successfully.', id });
 });
 
 // POST /api/assignments/:id/submit - Student submits assignment
-router.post('/:id/submit', authenticateToken, authorizeRoles('student'), upload.single('file'), (req, res) => {
+router.post('/:id/submit', authenticateToken, authorizeRoles('student'), upload.single('file'), async (req, res) => {
   const assignmentId = req.params.id;
   const studentId = req.user.id;
   const { notes } = req.body;
 
-  const assignment = get('SELECT * FROM assignments WHERE id = ?', [assignmentId]);
+  const assignment = await get('SELECT * FROM assignments WHERE id = ?', [assignmentId]);
   if (!assignment) {
     return res.status(404).json({ success: false, error: 'Assignment not found.' });
   }
@@ -111,7 +111,7 @@ router.post('/:id/submit', authenticateToken, authorizeRoles('student'), upload.
 
   const fileUrl = req.file ? `/uploads/submissions/${req.file.filename}` : (req.body.file_url || null);
 
-  const existing = get(
+  const existing = await get(
     'SELECT id, status FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?',
     [assignmentId, studentId]
   );
@@ -120,7 +120,7 @@ router.post('/:id/submit', authenticateToken, authorizeRoles('student'), upload.
     if (existing.status === 'reviewed') {
       return res.status(400).json({ success: false, error: 'Assignment has already been reviewed and graded. Cannot resubmit.' });
     }
-    run(
+    await run(
       `UPDATE assignment_submissions
        SET file_url = COALESCE(?, file_url), notes = ?, submitted_at = datetime('now'), status = ?
        WHERE id = ?`,
@@ -128,22 +128,22 @@ router.post('/:id/submit', authenticateToken, authorizeRoles('student'), upload.
     );
   } else {
     const subId = 'sub-' + Date.now();
-    run(
+    await run(
       `INSERT INTO assignment_submissions (id, assignment_id, student_id, file_url, notes, status)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [subId, assignmentId, studentId, fileUrl, notes || '', status]
     );
   }
 
-  logAudit(studentId, 'SUBMIT_ASSIGNMENT', 'assignment_submissions', assignmentId, { status }, req);
+  await logAudit(studentId, 'SUBMIT_ASSIGNMENT', 'assignment_submissions', assignmentId, { status }, req);
   res.json({ success: true, message: 'Assignment submitted successfully.' });
 });
 
 // GET /api/assignments/:id/submissions - Teacher views all submissions for an assignment
-router.get('/:id/submissions', authenticateToken, authorizeRoles('teacher', 'admin'), (req, res) => {
+router.get('/:id/submissions', authenticateToken, authorizeRoles('teacher', 'admin'), async (req, res) => {
   const assignmentId = req.params.id;
 
-  const submissions = query(
+  const submissions = await query(
     `SELECT sub.*, u.name as student_name, u.email as student_email, sp.student_id_number
      FROM assignment_submissions sub
      JOIN users u ON sub.student_id = u.id
@@ -157,7 +157,7 @@ router.get('/:id/submissions', authenticateToken, authorizeRoles('teacher', 'adm
 });
 
 // PUT /api/assignments/submissions/:submissionId/grade - Teacher grades submission
-router.put('/submissions/:submissionId/grade', authenticateToken, authorizeRoles('teacher', 'admin'), (req, res) => {
+router.put('/submissions/:submissionId/grade', authenticateToken, authorizeRoles('teacher', 'admin'), async (req, res) => {
   const { submissionId } = req.params;
   const { marks, feedback } = req.body;
 
@@ -165,14 +165,14 @@ router.put('/submissions/:submissionId/grade', authenticateToken, authorizeRoles
     return res.status(400).json({ success: false, error: 'Marks are required for grading.' });
   }
 
-  run(
+  await run(
     `UPDATE assignment_submissions
      SET marks = ?, feedback = ?, status = 'reviewed', reviewed_by = ?, reviewed_at = datetime('now')
      WHERE id = ?`,
     [marks, feedback || '', req.user.id, submissionId]
   );
 
-  logAudit(req.user.id, 'GRADE_ASSIGNMENT_SUBMISSION', 'assignment_submissions', submissionId, { marks }, req);
+  await logAudit(req.user.id, 'GRADE_ASSIGNMENT_SUBMISSION', 'assignment_submissions', submissionId, { marks }, req);
   res.json({ success: true, message: 'Submission graded successfully.' });
 });
 

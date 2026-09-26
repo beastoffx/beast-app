@@ -7,11 +7,11 @@ const { authorizeSuperAdmin } = require('../middleware/rbac');
 const { logAudit } = require('../middleware/audit');
 
 // Collision-safe Admin ID generator: ADM-2027-00001
-function generateUniqueAdminId(year = '2027') {
+async function generateUniqueAdminId(year = '2027') {
   let counter = 1;
   while (counter < 100000) {
     const candidate = `ADM-${year}-${String(counter).padStart(5, '0')}`;
-    const exists = get('SELECT id FROM admin_profiles WHERE admin_id_number = ?', [candidate]);
+    const exists = await get('SELECT id FROM admin_profiles WHERE admin_id_number = ?', [candidate]);
     if (!exists) {
       return candidate;
     }
@@ -21,11 +21,11 @@ function generateUniqueAdminId(year = '2027') {
 }
 
 // Helper to check if a user is a super admin
-function isSuperAdminUser(userId) {
-  const user = get('SELECT role FROM users WHERE id = ?', [userId]);
+async function isSuperAdminUser(userId) {
+  const user = await get('SELECT role FROM users WHERE id = ?', [userId]);
   if (!user) return false;
   if (user.role === 'super_admin') return true;
-  const profile = get('SELECT permissions_json FROM admin_profiles WHERE user_id = ?', [userId]);
+  const profile = await get('SELECT permissions_json FROM admin_profiles WHERE user_id = ?', [userId]);
   if (!profile || !profile.permissions_json) return false;
   try {
     const perms = typeof profile.permissions_json === 'string'
@@ -38,8 +38,8 @@ function isSuperAdminUser(userId) {
 }
 
 // Helper to count active super admins
-function countActiveSuperAdmins() {
-  const admins = query(`
+async function countActiveSuperAdmins() {
+  const admins = await query(`
     SELECT u.id, u.role, ap.permissions_json
     FROM users u
     JOIN admin_profiles ap ON u.id = ap.user_id
@@ -66,7 +66,7 @@ function countActiveSuperAdmins() {
 router.use(authenticateToken, authorizeSuperAdmin);
 
 // 1. GET /api/admins — List and search administrators
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { search, status } = req.query;
 
   let sql = `
@@ -109,7 +109,7 @@ router.get('/', (req, res) => {
 
   sql += ' ORDER BY ap.admin_id_number ASC, u.created_at DESC';
 
-  const rawAdmins = query(sql, params);
+  const rawAdmins = await query(sql, params);
   const admins = rawAdmins.map(adm => {
     let permissions = {};
     try {
@@ -148,10 +148,10 @@ router.get('/', (req, res) => {
 });
 
 // 2. GET /api/admins/:id — View single admin details and activity
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   const { id } = req.params;
 
-  const adm = get(`
+  const adm = await get(`
     SELECT 
       u.id, 
       u.name, 
@@ -188,13 +188,15 @@ router.get('/:id', (req, res) => {
   } catch (_) {}
 
   // Fetch recent audit logs relating to this admin
-  const auditLogs = query(`
+  const auditLogsRaw = await query(`
     SELECT id, user_id, action, entity_type, entity_id, details_json, created_at
     FROM audit_logs
     WHERE user_id = ? OR (entity_type = 'users' AND entity_id = ?)
     ORDER BY created_at DESC
     LIMIT 20
-  `, [id, id]).map(log => {
+  `, [id, id]);
+
+  const auditLogs = auditLogsRaw.map(log => {
     try {
       log.details = typeof log.details_json === 'string' ? JSON.parse(log.details_json) : log.details_json;
     } catch (_) {
@@ -230,7 +232,7 @@ router.get('/:id', (req, res) => {
 });
 
 // 3. POST /api/admins — Create a new Administrator (Super Admin only)
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const {
     name,
     email,
@@ -250,7 +252,7 @@ router.post('/', (req, res) => {
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  const existing = get('SELECT id FROM users WHERE email = ?', [cleanEmail]);
+  const existing = await get('SELECT id FROM users WHERE email = ?', [cleanEmail]);
   if (existing) {
     return res.status(400).json({
       success: false,
@@ -261,9 +263,9 @@ router.post('/', (req, res) => {
   // Auto-generate or validate unique Admin ID
   const finalAdminId = (admin_id_number && admin_id_number.trim())
     ? admin_id_number.trim().toUpperCase()
-    : generateUniqueAdminId();
+    : await generateUniqueAdminId();
 
-  const idCollision = get('SELECT id FROM admin_profiles WHERE admin_id_number = ?', [finalAdminId]);
+  const idCollision = await get('SELECT id FROM admin_profiles WHERE admin_id_number = ?', [finalAdminId]);
   if (idCollision) {
     return res.status(409).json({
       success: false,
@@ -293,21 +295,21 @@ router.post('/', (req, res) => {
 
   const assignedRole = (is_super_admin || permsObj.super_admin) ? 'super_admin' : 'admin';
 
-  transaction(() => {
-    run(
+  await transaction(async () => {
+    await run(
       `INSERT INTO users (id, email, password_hash, role, name, phone, phone_verified, status, is_active)
        VALUES (?, ?, ?, ?, ?, ?, 0, 'active', 1)`,
       [userId, cleanEmail, passwordHash, assignedRole, name, phone || null]
     );
 
-    run(
+    await run(
       `INSERT INTO admin_profiles (id, user_id, admin_id_number, designation, permissions_json, created_by)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [profileId, userId, finalAdminId, designation, permissionsJson, req.user.id]
     );
   });
 
-  logAudit(req.user.id, 'CREATE_ADMIN', 'users', userId, {
+  await logAudit(req.user.id, 'CREATE_ADMIN', 'users', userId, {
     name,
     email: cleanEmail,
     admin_id_number: finalAdminId,
@@ -332,23 +334,23 @@ router.post('/', (req, res) => {
 });
 
 // 4. PUT /api/admins/:id — Edit Administrator profile and permissions
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const { name, phone, designation, permissions, is_super_admin } = req.body;
 
-  const user = get('SELECT id, name, email, role, status FROM users WHERE id = ? AND role IN (\'admin\', \'super_admin\')', [id]);
+  const user = await get('SELECT id, name, email, role, status FROM users WHERE id = ? AND role IN (\'admin\', \'super_admin\')', [id]);
   if (!user) {
     return res.status(404).json({ success: false, error: 'Administrator account not found.' });
   }
 
-  const profile = get('SELECT * FROM admin_profiles WHERE user_id = ?', [id]);
+  const profile = await get('SELECT * FROM admin_profiles WHERE user_id = ?', [id]);
   if (!profile) {
     return res.status(404).json({ success: false, error: 'Admin profile record not found.' });
   }
 
   // Super Admin protection: Cannot demote the last super admin
-  if (isSuperAdminUser(id) && is_super_admin === false) {
-    const activeSuperCount = countActiveSuperAdmins();
+  if (await isSuperAdminUser(id) && is_super_admin === false) {
+    const activeSuperCount = await countActiveSuperAdmins();
     if (activeSuperCount <= 1) {
       return res.status(400).json({
         success: false,
@@ -374,24 +376,24 @@ router.put('/:id', (req, res) => {
     }
   }
 
-  transaction(() => {
+  await transaction(async () => {
     if (name || phone !== undefined || is_super_admin !== undefined) {
       const newRole = is_super_admin === true ? 'super_admin' : (is_super_admin === false ? 'admin' : null);
-      run(
+      await run(
         "UPDATE users SET name = COALESCE(?, name), phone = COALESCE(?, phone), role = COALESCE(?, role), updated_at = datetime('now') WHERE id = ?",
         [name || null, phone !== undefined ? phone : null, newRole, id]
       );
     }
 
     if (designation || updatedPerms) {
-      run(
+      await run(
         "UPDATE admin_profiles SET designation = COALESCE(?, designation), permissions_json = COALESCE(?, permissions_json), updated_at = datetime('now') WHERE user_id = ?",
         [designation || null, updatedPerms ? JSON.stringify(updatedPerms) : null, id]
       );
     }
   });
 
-  logAudit(req.user.id, 'UPDATE_ADMIN', 'users', id, {
+  await logAudit(req.user.id, 'UPDATE_ADMIN', 'users', id, {
     name,
     phone,
     designation,
@@ -405,11 +407,11 @@ router.put('/:id', (req, res) => {
 });
 
 // 5. POST /api/admins/:id/suspend — Suspend Administrator
-router.post('/:id/suspend', (req, res) => {
+router.post('/:id/suspend', async (req, res) => {
   const { id } = req.params;
   const { reason } = req.body;
 
-  const targetAdmin = get('SELECT id, name, email, role, status FROM users WHERE id = ? AND role IN (\'admin\', \'super_admin\')', [id]);
+  const targetAdmin = await get('SELECT id, name, email, role, status FROM users WHERE id = ? AND role IN (\'admin\', \'super_admin\')', [id]);
   if (!targetAdmin) {
     return res.status(404).json({ success: false, error: 'Administrator account not found.' });
   }
@@ -423,8 +425,8 @@ router.post('/:id/suspend', (req, res) => {
   }
 
   // Prevent suspending the only remaining active super admin
-  if (isSuperAdminUser(id)) {
-    const activeCount = countActiveSuperAdmins();
+  if (await isSuperAdminUser(id)) {
+    const activeCount = await countActiveSuperAdmins();
     if (activeCount <= 1) {
       return res.status(400).json({
         success: false,
@@ -433,9 +435,9 @@ router.post('/:id/suspend', (req, res) => {
     }
   }
 
-  run("UPDATE users SET status = 'suspended', is_active = 0, updated_at = datetime('now') WHERE id = ?", [id]);
+  await run("UPDATE users SET status = 'suspended', is_active = 0, updated_at = datetime('now') WHERE id = ?", [id]);
 
-  logAudit(req.user.id, 'SUSPEND_ADMIN', 'users', id, {
+  await logAudit(req.user.id, 'SUSPEND_ADMIN', 'users', id, {
     targetName: targetAdmin.name,
     targetEmail: targetAdmin.email,
     reason: reason || 'Administrative suspension'
@@ -448,17 +450,17 @@ router.post('/:id/suspend', (req, res) => {
 });
 
 // 6. POST /api/admins/:id/restore — Restore suspended or archived Administrator
-router.post('/:id/restore', (req, res) => {
+router.post('/:id/restore', async (req, res) => {
   const { id } = req.params;
 
-  const targetAdmin = get('SELECT id, name, email, role, status FROM users WHERE id = ? AND role IN (\'admin\', \'super_admin\')', [id]);
+  const targetAdmin = await get('SELECT id, name, email, role, status FROM users WHERE id = ? AND role IN (\'admin\', \'super_admin\')', [id]);
   if (!targetAdmin) {
     return res.status(404).json({ success: false, error: 'Administrator account not found.' });
   }
 
-  run("UPDATE users SET status = 'active', is_active = 1, updated_at = datetime('now') WHERE id = ?", [id]);
+  await run("UPDATE users SET status = 'active', is_active = 1, updated_at = datetime('now') WHERE id = ?", [id]);
 
-  logAudit(req.user.id, 'RESTORE_ADMIN', 'users', id, {
+  await logAudit(req.user.id, 'RESTORE_ADMIN', 'users', id, {
     targetName: targetAdmin.name,
     targetEmail: targetAdmin.email
   }, req);
@@ -470,11 +472,11 @@ router.post('/:id/restore', (req, res) => {
 });
 
 // 7. POST /api/admins/:id/archive — Archive Administrator (Controlled soft-removal)
-router.post('/:id/archive', (req, res) => {
+router.post('/:id/archive', async (req, res) => {
   const { id } = req.params;
   const { reason } = req.body;
 
-  const targetAdmin = get('SELECT id, name, email, role, status FROM users WHERE id = ? AND role IN (\'admin\', \'super_admin\')', [id]);
+  const targetAdmin = await get('SELECT id, name, email, role, status FROM users WHERE id = ? AND role IN (\'admin\', \'super_admin\')', [id]);
   if (!targetAdmin) {
     return res.status(404).json({ success: false, error: 'Administrator account not found.' });
   }
@@ -488,8 +490,8 @@ router.post('/:id/archive', (req, res) => {
   }
 
   // Prevent archiving the only remaining active super admin
-  if (isSuperAdminUser(id)) {
-    const activeCount = countActiveSuperAdmins();
+  if (await isSuperAdminUser(id)) {
+    const activeCount = await countActiveSuperAdmins();
     if (activeCount <= 1) {
       return res.status(400).json({
         success: false,
@@ -498,9 +500,9 @@ router.post('/:id/archive', (req, res) => {
     }
   }
 
-  run("UPDATE users SET status = 'archived', is_active = 0, updated_at = datetime('now') WHERE id = ?", [id]);
+  await run("UPDATE users SET status = 'archived', is_active = 0, updated_at = datetime('now') WHERE id = ?", [id]);
 
-  logAudit(req.user.id, 'ARCHIVE_ADMIN', 'users', id, {
+  await logAudit(req.user.id, 'ARCHIVE_ADMIN', 'users', id, {
     targetName: targetAdmin.name,
     targetEmail: targetAdmin.email,
     reason: reason || 'Administrative removal / archiving'
@@ -513,17 +515,19 @@ router.post('/:id/archive', (req, res) => {
 });
 
 // 8. GET /api/admins/:id/audit — View specific Admin audit history
-router.get('/:id/audit', (req, res) => {
+router.get('/:id/audit', async (req, res) => {
   const { id } = req.params;
 
-  const auditLogs = query(`
+  const auditLogsRaw = await query(`
     SELECT a.*, actor.name as actor_name, actor.role as actor_role
     FROM audit_logs a
     LEFT JOIN users actor ON a.user_id = actor.id
     WHERE a.user_id = ? OR (a.entity_type = 'users' AND a.entity_id = ?)
     ORDER BY a.created_at DESC
     LIMIT 50
-  `, [id, id]).map(log => {
+  `, [id, id]);
+
+  const auditLogs = auditLogsRaw.map(log => {
     try {
       log.details = typeof log.details_json === 'string' ? JSON.parse(log.details_json) : log.details_json;
     } catch (_) {

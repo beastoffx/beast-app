@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const config = require('../config');
 const { get } = require('../db');
 
-function authenticateToken(req, res, next) {
+async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
 
@@ -16,7 +16,7 @@ function authenticateToken(req, res, next) {
   try {
     const decoded = jwt.verify(token, config.jwtSecret);
     // Fetch live user status to ensure account is not deactivated or suspended
-    const user = get(
+    const user = await get(
       'SELECT id, google_uid, email, role, name, phone, phone_verified, status, is_active FROM users WHERE id = ?',
       [decoded.id]
     );
@@ -51,7 +51,7 @@ function authenticateToken(req, res, next) {
 
     // Attach student subscription attributes if role is student
     if (user.role === 'student') {
-      const studentProfile = get(
+      const studentProfile = await get(
         'SELECT subscription_status, access_start_date, access_end_date, resource_permissions_json FROM student_profiles WHERE user_id = ?',
         [user.id]
       );
@@ -71,7 +71,7 @@ function authenticateToken(req, res, next) {
 
     // Attach admin profile & permissions if role is admin or super_admin
     if (user.role === 'admin' || user.role === 'super_admin') {
-      const adminProfile = get(
+      const adminProfile = await get(
         'SELECT designation, permissions_json, admin_id_number FROM admin_profiles WHERE user_id = ?',
         [user.id]
       );

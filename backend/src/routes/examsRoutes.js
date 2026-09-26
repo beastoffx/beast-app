@@ -7,7 +7,7 @@ const { logAudit } = require('../middleware/audit');
 const router = express.Router();
 
 // GET /api/exams - List exams
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   const user = req.user;
   let sql = `
     SELECT e.*, b.name as batch_name, s.name as session_name
@@ -36,11 +36,12 @@ router.get('/', authenticateToken, (req, res) => {
   }
 
   sql += ` ORDER BY e.start_date DESC`;
-  const exams = query(sql, params);
+  const exams = await query(sql, params);
 
   // Attach exam subjects to each exam
-  const fullExams = exams.map(exam => {
-    const subjects = query(
+  const fullExams = [];
+  for (const exam of exams) {
+    const subjects = await query(
       `SELECT es.*, s.name as subject_name, s.code as subject_code
        FROM exam_subjects es
        JOIN subjects s ON es.subject_id = s.id
@@ -48,14 +49,14 @@ router.get('/', authenticateToken, (req, res) => {
        ORDER BY es.exam_date ASC, es.start_time ASC`,
       [exam.id]
     );
-    return { ...exam, subjects };
-  });
+    fullExams.push({ ...exam, subjects });
+  }
 
   res.json({ success: true, data: fullExams });
 });
 
 // POST /api/exams - Admin or Teacher creates exam with subject schedule
-router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), (req, res) => {
+router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), async (req, res) => {
   const { title, academic_session_id, batch_id, exam_type, start_date, end_date, instructions, subjects } = req.body;
 
   if (!title || !academic_session_id || !start_date || !end_date) {
@@ -64,17 +65,17 @@ router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), (req, re
 
   const examId = 'exam-' + Date.now();
 
-  transaction(() => {
-    run(
+  await transaction(async () => {
+    await run(
       `INSERT INTO exams (id, title, academic_session_id, batch_id, exam_type, start_date, end_date, instructions)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [examId, title, academic_session_id, batch_id || null, exam_type || 'offline', start_date, end_date, instructions || '']
     );
 
     if (Array.isArray(subjects) && subjects.length > 0) {
-      subjects.forEach(sub => {
+      for (const sub of subjects) {
         const esId = 'es-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
-        run(
+        await run(
           `INSERT INTO exam_subjects (id, exam_id, subject_id, exam_date, start_time, duration_minutes, max_marks, passing_marks)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
@@ -88,16 +89,16 @@ router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), (req, re
             sub.passing_marks || 35
           ]
         );
-      });
+      }
     }
   });
 
-  logAudit(req.user.id, 'CREATE_EXAM', 'exams', examId, { title, batch_id }, req);
+  await logAudit(req.user.id, 'CREATE_EXAM', 'exams', examId, { title, batch_id }, req);
   res.json({ success: true, message: 'Examination created successfully.', id: examId });
 });
 
 // POST /api/exams/:id/subjects - Add subject slot to exam
-router.post('/:id/subjects', authenticateToken, authorizeRoles('admin', 'teacher'), (req, res) => {
+router.post('/:id/subjects', authenticateToken, authorizeRoles('admin', 'teacher'), async (req, res) => {
   const examId = req.params.id;
   const { subject_id, exam_date, start_time, duration_minutes, max_marks, passing_marks } = req.body;
 
@@ -106,7 +107,7 @@ router.post('/:id/subjects', authenticateToken, authorizeRoles('admin', 'teacher
   }
 
   const esId = 'es-' + Date.now();
-  run(
+  await run(
     `INSERT INTO exam_subjects (id, exam_id, subject_id, exam_date, start_time, duration_minutes, max_marks, passing_marks)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [esId, examId, subject_id, exam_date, start_time, duration_minutes || 180, max_marks || 100, passing_marks || 35]

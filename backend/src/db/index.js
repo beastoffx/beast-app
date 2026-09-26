@@ -1,10 +1,39 @@
 const { DatabaseSync } = require('node:sqlite');
+const { AsyncLocalStorage } = require('node:async_hooks');
 const fs = require('fs');
 const path = require('path');
 const config = require('../config');
 
+const txStorage = new AsyncLocalStorage();
 let dbInstance = null;
+let pgPoolInstance = null;
 
+/**
+ * Determine whether the application runtime should use Supabase PostgreSQL.
+ * True when DATABASE_URL is present and runtime is production or explicitly requested via USE_POSTGRES=true.
+ */
+function isUsingPostgres() {
+  return Boolean(config.databaseUrl) && (config.nodeEnv === 'production' || process.env.USE_POSTGRES === 'true');
+}
+
+/**
+ * Human-readable description of active database target for startup logging and diagnostics.
+ */
+function getDbTargetDescription() {
+  if (isUsingPostgres()) {
+    try {
+      const u = new URL(config.databaseUrl);
+      return `Supabase PostgreSQL (${u.hostname}:${u.port || 5432}${u.pathname})`;
+    } catch (_) {
+      return 'Supabase PostgreSQL (DATABASE_URL)';
+    }
+  }
+  return `SQLite (${config.dbPath})`;
+}
+
+/**
+ * SQLite Connection Manager (Used for local offline development and automated test suites)
+ */
 function getDb(customPath = null) {
   if (dbInstance && !customPath) {
     return dbInstance;
@@ -33,6 +62,266 @@ function getDb(customPath = null) {
     dbInstance = db;
   }
   return db;
+}
+
+/**
+ * PostgreSQL Connection Pool Manager (Used for production on Render)
+ */
+function getPgPool() {
+  if (!config.databaseUrl) {
+    return null;
+  }
+  if (!pgPoolInstance) {
+    const { Pool } = require('pg');
+    let servername;
+    try {
+      const u = new URL(config.databaseUrl);
+      servername = u.hostname;
+    } catch (_) {}
+
+    pgPoolInstance = new Pool({
+      connectionString: config.databaseUrl,
+      ssl: {
+        rejectUnauthorized: false,
+        ...(servername ? { servername } : {})
+      },
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000
+    });
+
+    pgPoolInstance.on('error', (err) => {
+      console.error('[PG POOL] Unexpected error on idle client:', err.message);
+    });
+  }
+  return pgPoolInstance;
+}
+
+async function asyncPgQuery(text, params = []) {
+  const pool = getPgPool();
+  if (!pool) {
+    throw new Error('PostgreSQL pool is not initialized. DATABASE_URL is missing.');
+  }
+  return pool.query(text, params);
+}
+
+/**
+ * Transparent SQL Translator: SQLite -> PostgreSQL Dialect
+ * - Converts positional '?' placeholders to '$1, $2, ...' (respecting quotes and comments)
+ * - Converts SQLite datetime('now') -> CURRENT_TIMESTAMP
+ * - Converts SQLite datetime('now', '-N seconds/minutes') -> (CURRENT_TIMESTAMP - INTERVAL 'N seconds/minutes')
+ * - Converts SQLite date('now') -> CURRENT_DATE
+ * - Converts SQLite LIKE -> PostgreSQL ILIKE for case-insensitive matching
+ * - Converts boolean literals (is_active = 1/0, etc.) -> is_active = true/false
+ * - Converts SQLite INSERT OR REPLACE for teacher_assignments -> PostgreSQL ON CONFLICT DO UPDATE
+ */
+function toPgSql(sql) {
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+  let paramIndex = 1;
+  let out = '';
+
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+    const nextCh = sql[i + 1];
+
+    if (inLineComment) {
+      out += ch;
+      if (ch === '\n') inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      out += ch;
+      if (ch === '*' && nextCh === '/') {
+        out += nextCh;
+        i++;
+        inBlockComment = false;
+      }
+      continue;
+    }
+    if (inSingleQuote) {
+      out += ch;
+      if (ch === "'") {
+        if (nextCh === "'") {
+          out += nextCh;
+          i++;
+        } else {
+          inSingleQuote = false;
+        }
+      }
+      continue;
+    }
+    if (inDoubleQuote) {
+      out += ch;
+      if (ch === '"') inDoubleQuote = false;
+      continue;
+    }
+
+    if (ch === '-' && nextCh === '-') {
+      inLineComment = true;
+      out += '--';
+      i++;
+      continue;
+    }
+    if (ch === '/' && nextCh === '*') {
+      inBlockComment = true;
+      out += '/*';
+      i++;
+      continue;
+    }
+
+    if (ch === "'") {
+      inSingleQuote = true;
+      out += ch;
+      continue;
+    }
+    if (ch === '"') {
+      inDoubleQuote = true;
+      out += ch;
+      continue;
+    }
+
+    if (ch === '?') {
+      out += `$${paramIndex++}`;
+      continue;
+    }
+
+    out += ch;
+  }
+
+  // Dialect translations
+  out = out.replace(/\bdatetime\('now',\s*'-(\d+)\s*seconds'\)/gi, "(CURRENT_TIMESTAMP - INTERVAL '$1 seconds')");
+  out = out.replace(/\bdatetime\('now',\s*'-(\d+)\s*minutes'\)/gi, "(CURRENT_TIMESTAMP - INTERVAL '$1 minutes')");
+  out = out.replace(/\bdatetime\('now'\)/gi, "CURRENT_TIMESTAMP");
+  out = out.replace(/\bdate\('now'\)/gi, "CURRENT_DATE");
+
+  // Boolean column literals in SET or WHERE clauses
+  out = out.replace(/\b(is_active|is_verified|phone_verified|is_current|is_pinned|is_published|is_read)\s*=\s*1\b/gi, '$1 = true');
+  out = out.replace(/\b(is_active|is_verified|phone_verified|is_current|is_pinned|is_published|is_read)\s*=\s*0\b/gi, '$1 = false');
+
+  // Case-insensitive LIKE to ILIKE in PostgreSQL
+  out = out.replace(/\bLIKE\b/g, 'ILIKE');
+
+  // Upsert for teacher_assignments
+  out = out.replace(
+    /INSERT\s+OR\s+REPLACE\s+INTO\s+teacher_assignments\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)/i,
+    'INSERT INTO teacher_assignments ($1) VALUES ($2) ON CONFLICT (teacher_id, batch_id, subject_id, academic_session_id) DO UPDATE SET assigned_at = CURRENT_TIMESTAMP'
+  );
+
+  return out;
+}
+
+function sanitizeParams(params) {
+  if (!params || !Array.isArray(params)) return [];
+  return params.map(p => p === undefined ? null : p);
+}
+
+function query(sql, params = []) {
+  if (isUsingPostgres()) {
+    const activeClient = txStorage.getStore() || getPgPool();
+    const text = toPgSql(sql);
+    const values = sanitizeParams(params);
+    return activeClient.query(text, values).then(res => res.rows);
+  }
+  const db = getDb();
+  const stmt = db.prepare(sql);
+  return stmt.all(...params);
+}
+
+function get(sql, params = []) {
+  if (isUsingPostgres()) {
+    const activeClient = txStorage.getStore() || getPgPool();
+    const text = toPgSql(sql);
+    const values = sanitizeParams(params);
+    return activeClient.query(text, values).then(res => res.rows[0] !== undefined ? res.rows[0] : undefined);
+  }
+  const db = getDb();
+  const stmt = db.prepare(sql);
+  return stmt.get(...params);
+}
+
+function run(sql, params = []) {
+  if (isUsingPostgres()) {
+    const activeClient = txStorage.getStore() || getPgPool();
+    const text = toPgSql(sql);
+    const values = sanitizeParams(params);
+    return activeClient.query(text, values).then(res => ({
+      changes: res.rowCount || 0,
+      lastInsertRowid: null
+    }));
+  }
+  const db = getDb();
+  const stmt = db.prepare(sql);
+  return stmt.run(...params);
+}
+
+function exec(sql) {
+  if (isUsingPostgres()) {
+    const activeClient = txStorage.getStore() || getPgPool();
+    return activeClient.query(sql).then(() => {});
+  }
+  const db = getDb();
+  return db.exec(sql);
+}
+
+function transaction(callback) {
+  if (isUsingPostgres()) {
+    return (async () => {
+      const pool = getPgPool();
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const boundQuery = async (s, p = []) => {
+          const res = await client.query(toPgSql(s), sanitizeParams(p));
+          return res.rows;
+        };
+        const boundGet = async (s, p = []) => {
+          const rows = await boundQuery(s, p);
+          return rows[0] !== undefined ? rows[0] : undefined;
+        };
+        const boundRun = async (s, p = []) => {
+          const res = await client.query(toPgSql(s), sanitizeParams(p));
+          return { changes: res.rowCount || 0, lastInsertRowid: null };
+        };
+
+        const result = await txStorage.run(client, async () => {
+          return await callback({ query: boundQuery, get: boundGet, run: boundRun });
+        });
+        await client.query('COMMIT');
+        return result;
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    })();
+  }
+
+  const db = getDb();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = callback({ query, get, run });
+    if (result && typeof result.then === 'function') {
+      return result.then(
+        (val) => {
+          db.exec('COMMIT');
+          return val;
+        },
+        (err) => {
+          db.exec('ROLLBACK');
+          throw err;
+        }
+      );
+    }
+    db.exec('COMMIT');
+    return result;
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 function runMigrations(db) {
@@ -145,73 +434,19 @@ function runMigrations(db) {
 }
 
 function initSchema(db = null) {
+  if (isUsingPostgres()) {
+    const pool = getPgPool();
+    return pool.query('SELECT count(*) FROM users').then(res => {
+      console.log(`[DB INIT] Supabase PostgreSQL verified. Central users count: ${res.rows[0].count}`);
+    });
+  }
   const database = db || getDb();
   runMigrations(database);
   const schemaPath = path.join(__dirname, 'schema.sql');
   const schemaSql = fs.readFileSync(schemaPath, 'utf8');
   database.exec(schemaSql);
   runMigrations(database);
-}
-
-// PostgreSQL Adapter (Available when DATABASE_URL is configured)
-let pgPoolInstance = null;
-function getPgPool() {
-  if (!config.databaseUrl) {
-    return null;
-  }
-  if (!pgPoolInstance) {
-    const { Pool } = require('pg');
-    pgPoolInstance = new Pool({
-      connectionString: config.databaseUrl,
-      ssl: (config.nodeEnv === 'production' || (config.databaseUrl && config.databaseUrl.includes('supabase'))) ? { rejectUnauthorized: false } : false
-    });
-  }
-  return pgPoolInstance;
-}
-
-async function asyncPgQuery(text, params = []) {
-  const pool = getPgPool();
-  if (!pool) {
-    throw new Error('PostgreSQL pool is not initialized. DATABASE_URL is missing.');
-  }
-  return pool.query(text, params);
-}
-
-// Helper methods with standard signatures
-function query(sql, params = []) {
-  const db = getDb();
-  const stmt = db.prepare(sql);
-  return stmt.all(...params);
-}
-
-function get(sql, params = []) {
-  const db = getDb();
-  const stmt = db.prepare(sql);
-  return stmt.get(...params);
-}
-
-function run(sql, params = []) {
-  const db = getDb();
-  const stmt = db.prepare(sql);
-  return stmt.run(...params);
-}
-
-function exec(sql) {
-  const db = getDb();
-  return db.exec(sql);
-}
-
-function transaction(callback) {
-  const db = getDb();
-  db.exec('BEGIN IMMEDIATE');
-  try {
-    const result = callback({ query, get, run });
-    db.exec('COMMIT');
-    return result;
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
+  return Promise.resolve();
 }
 
 module.exports = {
@@ -223,5 +458,8 @@ module.exports = {
   exec,
   transaction,
   getPgPool,
-  asyncPgQuery
+  asyncPgQuery,
+  isUsingPostgres,
+  getDbTargetDescription,
+  toPgSql
 };

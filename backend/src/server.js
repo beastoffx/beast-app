@@ -4,7 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
 const config = require('./config');
-const { initSchema } = require('./db');
+const { initSchema, isUsingPostgres, getDbTargetDescription, getPgPool, getDb } = require('./db');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 // Route imports
@@ -87,11 +87,29 @@ function createApp() {
   app.use('/uploads', express.static(config.uploadDir));
 
   // Health check
-  app.get('/api/health', (req, res) => {
+  app.get('/api/health', async (req, res) => {
+    let dbStatus = 'CONNECTED';
+    try {
+      if (isUsingPostgres()) {
+        const pool = getPgPool();
+        await pool.query('SELECT 1');
+      } else {
+        const db = getDb();
+        db.prepare('SELECT 1').get();
+      }
+    } catch (err) {
+      dbStatus = `ERROR: ${err.message}`;
+    }
+
     res.json({
       status: 'UP',
       app: 'B.E.A.S.T ACADEMY Production API',
       version: '1.0.0',
+      database: {
+        status: dbStatus,
+        engine: isUsingPostgres() ? 'PostgreSQL' : 'SQLite',
+        target: getDbTargetDescription()
+      },
       timestamp: new Date().toISOString()
     });
   });
@@ -123,18 +141,26 @@ function createApp() {
 }
 
 if (require.main === module) {
-  initSchema();
-  const app = createApp();
-  const port = config.port;
-  app.listen(port, () => {
-    console.log(`====================================================`);
-    console.log(`B.E.A.S.T ACADEMY Server running on port ${port}`);
-    console.log(`Environment: ${config.nodeEnv}`);
-    console.log(`Database: ${config.dbPath}`);
-    console.log(`Uploads: ${config.uploadDir}`);
-    console.log(`Health: http://localhost:${port}/api/health`);
-    console.log(`====================================================`);
-  });
+  (async () => {
+    try {
+      await initSchema();
+      const app = createApp();
+      const port = config.port;
+      app.listen(port, () => {
+        console.log(`====================================================`);
+        console.log(`B.E.A.S.T ACADEMY Server running on port ${port}`);
+        console.log(`Environment: ${config.nodeEnv}`);
+        console.log(`Database: ${getDbTargetDescription()}`);
+        console.log(`Engine: ${isUsingPostgres() ? 'PostgreSQL (Supabase)' : 'SQLite'}`);
+        console.log(`Uploads: ${config.uploadDir}`);
+        console.log(`Health: http://localhost:${port}/api/health`);
+        console.log(`====================================================`);
+      });
+    } catch (err) {
+      console.error('[FATAL] Failed to initialize server:', err);
+      process.exit(1);
+    }
+  })();
 }
 
 module.exports = { createApp };

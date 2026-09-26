@@ -11,7 +11,7 @@ const { EmailService } = require('../services/emailService');
 const router = express.Router();
 
 // POST /api/auth/login
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -22,7 +22,7 @@ router.post('/login', (req, res) => {
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  const user = get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
+  const user = await get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
 
   if (!user) {
     return res.status(401).json({
@@ -63,7 +63,7 @@ router.post('/login', (req, res) => {
   // Fetch role-specific profile details
   let profile = null;
   if (user.role === 'student') {
-    profile = get(
+    profile = await get(
       `SELECT sp.*, c.name as class_name, b.name as batch_name, s.name as session_name
        FROM student_profiles sp
        LEFT JOIN classes c ON sp.class_id = c.id
@@ -73,9 +73,9 @@ router.post('/login', (req, res) => {
       [user.id]
     );
   } else if (user.role === 'teacher') {
-    profile = get('SELECT * FROM teacher_profiles WHERE user_id = ?', [user.id]);
+    profile = await get('SELECT * FROM teacher_profiles WHERE user_id = ?', [user.id]);
   } else if (user.role === 'admin' || user.role === 'super_admin') {
-    profile = get('SELECT * FROM admin_profiles WHERE user_id = ?', [user.id]);
+    profile = await get('SELECT * FROM admin_profiles WHERE user_id = ?', [user.id]);
   }
 
   logAudit(user.id, 'USER_LOGIN', 'users', user.id, { role: user.role }, req);
@@ -99,12 +99,12 @@ router.post('/login', (req, res) => {
 });
 
 // GET /api/auth/me
-router.get('/me', authenticateToken, (req, res) => {
+router.get('/me', authenticateToken, async (req, res) => {
   const user = req.user;
   let profile = null;
 
   if (user.role === 'student') {
-    profile = get(
+    profile = await get(
       `SELECT sp.*, c.name as class_name, b.name as batch_name, s.name as session_name
        FROM student_profiles sp
        LEFT JOIN classes c ON sp.class_id = c.id
@@ -114,9 +114,9 @@ router.get('/me', authenticateToken, (req, res) => {
       [user.id]
     );
   } else if (user.role === 'teacher') {
-    profile = get('SELECT * FROM teacher_profiles WHERE user_id = ?', [user.id]);
+    profile = await get('SELECT * FROM teacher_profiles WHERE user_id = ?', [user.id]);
   } else if (user.role === 'admin' || user.role === 'super_admin') {
-    profile = get('SELECT * FROM admin_profiles WHERE user_id = ?', [user.id]);
+    profile = await get('SELECT * FROM admin_profiles WHERE user_id = ?', [user.id]);
   }
 
   res.json({
@@ -127,7 +127,7 @@ router.get('/me', authenticateToken, (req, res) => {
 });
 
 // POST /api/auth/change-password
-router.post('/change-password', authenticateToken, (req, res) => {
+router.post('/change-password', authenticateToken, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 
   if (!currentPassword || !newPassword) {
@@ -144,7 +144,7 @@ router.post('/change-password', authenticateToken, (req, res) => {
     });
   }
 
-  const user = get('SELECT * FROM users WHERE id = ?', [req.user.id]);
+  const user = await get('SELECT * FROM users WHERE id = ?', [req.user.id]);
   if (!bcrypt.compareSync(currentPassword, user.password_hash)) {
     return res.status(400).json({
       success: false,
@@ -153,7 +153,7 @@ router.post('/change-password', authenticateToken, (req, res) => {
   }
 
   const newHash = bcrypt.hashSync(newPassword, 10);
-  run("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?", [newHash, req.user.id]);
+  await run("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?", [newHash, req.user.id]);
 
   logAudit(req.user.id, 'CHANGE_PASSWORD', 'users', req.user.id, {}, req);
 
@@ -164,13 +164,13 @@ router.post('/change-password', authenticateToken, (req, res) => {
 });
 
 // POST /api/auth/recover-request
-router.post('/recover-request', (req, res) => {
+router.post('/recover-request', async (req, res) => {
   const { email } = req.body;
   if (!email) {
     return res.status(400).json({ success: false, error: 'Email is required.' });
   }
 
-  const user = get('SELECT id, email, role FROM users WHERE email = ?', [email.trim().toLowerCase()]);
+  const user = await get('SELECT id, email, role FROM users WHERE email = ?', [email.trim().toLowerCase()]);
   if (user) {
     logAudit(user.id, 'PASSWORD_RECOVERY_REQUEST', 'users', user.id, { email: user.email }, req);
   }
@@ -192,9 +192,9 @@ router.post('/logout', authenticateToken, (req, res) => {
 });
 
 // Helper: Fetch role profile with full academic details
-function fetchUserProfile(user) {
+async function fetchUserProfile(user) {
   if (user.role === 'student') {
-    return get(
+    return await get(
       `SELECT sp.*, c.name as class_name, b.name as batch_name, s.name as session_name
        FROM student_profiles sp
        LEFT JOIN classes c ON sp.class_id = c.id
@@ -204,9 +204,9 @@ function fetchUserProfile(user) {
       [user.id]
     );
   } else if (user.role === 'teacher') {
-    return get('SELECT * FROM teacher_profiles WHERE user_id = ?', [user.id]);
+    return await get('SELECT * FROM teacher_profiles WHERE user_id = ?', [user.id]);
   } else if (user.role === 'admin' || user.role === 'super_admin') {
-    return get('SELECT * FROM admin_profiles WHERE user_id = ?', [user.id]);
+    return await get('SELECT * FROM admin_profiles WHERE user_id = ?', [user.id]);
   }
   return null;
 }
@@ -235,7 +235,7 @@ router.post('/google', async (req, res) => {
     const { googleUid, email, name, picture } = verification;
 
     // 1. Check whether googleUid is already linked to an existing account
-    const user = get(
+    const user = await get(
       `SELECT id, google_uid, email, role, name, phone, phone_verified, status, avatar_url, is_active 
        FROM users WHERE google_uid = ?`,
       [googleUid]
@@ -260,7 +260,7 @@ router.post('/google', async (req, res) => {
       }
 
       // Record successful login
-      run("UPDATE users SET last_login_at = datetime('now'), updated_at = datetime('now') WHERE id = ?", [user.id]);
+      await run("UPDATE users SET last_login_at = datetime('now'), updated_at = datetime('now') WHERE id = ?", [user.id]);
 
       const token = jwt.sign(
         { id: user.id, email: user.email, role: user.role, name: user.name, googleUid: user.google_uid },
@@ -268,7 +268,7 @@ router.post('/google', async (req, res) => {
         { expiresIn: config.jwtExpiresIn }
       );
 
-      const profile = fetchUserProfile(user);
+      const profile = await fetchUserProfile(user);
       logAudit(user.id, 'GOOGLE_LOGIN_SUCCESS', 'users', user.id, { role: user.role, googleUid }, req);
 
       return res.json({
@@ -291,7 +291,7 @@ router.post('/google', async (req, res) => {
     }
 
     // 2. Account is not linked by google_uid. Check if pre-provisioned staff matches email
-    const facultyUser = get(
+    const facultyUser = await get(
       `SELECT * FROM users WHERE email = ? AND role IN ('admin', 'teacher', 'super_admin') AND (google_uid IS NULL OR google_uid = '')`,
       [email]
     );
@@ -305,13 +305,13 @@ router.post('/google', async (req, res) => {
         });
       }
 
-      run("UPDATE users SET google_uid = ?, updated_at = datetime('now'), last_login_at = datetime('now') WHERE id = ?", [googleUid, facultyUser.id]);
+      await run("UPDATE users SET google_uid = ?, updated_at = datetime('now'), last_login_at = datetime('now') WHERE id = ?", [googleUid, facultyUser.id]);
       const token = jwt.sign(
         { id: facultyUser.id, email: facultyUser.email, role: facultyUser.role, name: facultyUser.name, googleUid },
         config.jwtSecret,
         { expiresIn: config.jwtExpiresIn }
       );
-      const profile = fetchUserProfile(facultyUser);
+      const profile = await fetchUserProfile(facultyUser);
       logAudit(facultyUser.id, 'FACULTY_GOOGLE_LINKED', 'users', facultyUser.id, { googleUid }, req);
 
       return res.json({
@@ -364,7 +364,7 @@ async function handleValidateStudent(req, res) {
     const cleanStudentId = studentIdNumber.trim().toUpperCase();
 
     // Verify Student ID in institutional registry
-    const studentProfile = get(
+    const studentProfile = await get(
       `SELECT sp.*, u.id as user_id, u.name, u.email, u.google_uid, u.status, u.is_active, u.role,
               c.name as class_name, b.name as batch_name
        FROM student_profiles sp
@@ -415,7 +415,7 @@ async function handleValidateStudent(req, res) {
 
     // Check if the Google account is already linked to another student or staff
     if (googleUid) {
-      const existingGoogle = get('SELECT id FROM users WHERE google_uid = ? AND id != ?', [googleUid, studentProfile.user_id]);
+      const existingGoogle = await get('SELECT id FROM users WHERE google_uid = ? AND id != ?', [googleUid, studentProfile.user_id]);
       if (existingGoogle) {
         return res.status(409).json({
           success: false,
@@ -456,7 +456,7 @@ async function handleSendEmailOtp(req, res) {
     const cleanStudentId = studentIdNumber.trim().toUpperCase();
 
     // Verify Student ID exists and belongs to a student
-    const studentProfile = get(
+    const studentProfile = await get(
       `SELECT sp.*, u.id as user_id, u.name, u.email, u.google_uid, u.status, u.is_active, u.role 
        FROM student_profiles sp
        JOIN users u ON sp.user_id = u.id
@@ -499,7 +499,7 @@ async function handleSendEmailOtp(req, res) {
     }
 
     // Check if another user already holds this googleUid
-    const existingGoogle = get('SELECT id FROM users WHERE google_uid = ? AND id != ?', [googleUid, studentProfile.user_id]);
+    const existingGoogle = await get('SELECT id FROM users WHERE google_uid = ? AND id != ?', [googleUid, studentProfile.user_id]);
     if (existingGoogle) {
       return res.status(409).json({
         success: false,
@@ -508,7 +508,7 @@ async function handleSendEmailOtp(req, res) {
     }
 
     // Rate-limiting: prevent spamming multiple requests within 60 seconds
-    const recentOtp = get(
+    const recentOtp = await get(
       `SELECT created_at FROM email_verifications 
        WHERE student_id_number = ? AND created_at > datetime('now', '-60 seconds')
        ORDER BY created_at DESC LIMIT 1`,
@@ -571,7 +571,7 @@ async function handleVerifyEmailOtp(req, res) {
     const cleanStudentId = studentIdNumber.trim().toUpperCase();
 
     // Verify OTP code
-    const verification = EmailService.verifyOtp({
+    const verification = await EmailService.verifyOtp({
       sessionId,
       otpCode: otp,
       studentIdNumber: cleanStudentId,
@@ -586,7 +586,7 @@ async function handleVerifyEmailOtp(req, res) {
     }
 
     // Verify student user record
-    const studentProfile = get(
+    const studentProfile = await get(
       `SELECT sp.*, u.id as user_id, u.name, u.email, u.google_uid, u.status, u.is_active, u.role 
        FROM student_profiles sp
        JOIN users u ON sp.user_id = u.id
@@ -608,19 +608,19 @@ async function handleVerifyEmailOtp(req, res) {
     }
 
     // Transactional atomic account linking and activation
-    transaction(() => {
+    await transaction(async () => {
       // Re-verify uniqueness inside transaction to prevent race conditions
-      const existingGoogle = get('SELECT id FROM users WHERE google_uid = ? AND id != ?', [googleUid, studentProfile.user_id]);
+      const existingGoogle = await get('SELECT id FROM users WHERE google_uid = ? AND id != ?', [googleUid, studentProfile.user_id]);
       if (existingGoogle) {
         throw new Error('This Google account is already linked to another institutional user.');
       }
 
-      const currentStudent = get('SELECT u.id, u.google_uid FROM users u JOIN student_profiles sp ON u.id = sp.user_id WHERE sp.student_id_number = ?', [cleanStudentId]);
+      const currentStudent = await get('SELECT u.id, u.google_uid FROM users u JOIN student_profiles sp ON u.id = sp.user_id WHERE sp.student_id_number = ?', [cleanStudentId]);
       if (currentStudent && currentStudent.google_uid && currentStudent.google_uid !== googleUid) {
         throw new Error('This Student ID is already linked to another Google account.');
       }
 
-      run(
+      await run(
         `UPDATE users 
          SET google_uid = ?, status = 'active', is_active = 1, updated_at = datetime('now'), last_login_at = datetime('now')
          WHERE id = ?`,
@@ -628,8 +628,8 @@ async function handleVerifyEmailOtp(req, res) {
       );
     });
 
-    const updatedUser = get('SELECT id, google_uid, email, role, name, phone, status, is_active FROM users WHERE id = ?', [studentProfile.user_id]);
-    const profile = fetchUserProfile(updatedUser);
+    const updatedUser = await get('SELECT id, google_uid, email, role, name, phone, status, is_active FROM users WHERE id = ?', [studentProfile.user_id]);
+    const profile = await fetchUserProfile(updatedUser);
 
     const token = jwt.sign(
       { id: updatedUser.id, email: updatedUser.email, role: updatedUser.role, name: updatedUser.name, googleUid: updatedUser.google_uid },
@@ -664,7 +664,7 @@ async function handleVerifyEmailOtp(req, res) {
 }
 
 // Router mounts: Official Email OTP Endpoints
-router.post('/activate/student', (req, res) => {
+router.post('/activate/student', async (req, res) => {
   if (req.body.otp || req.body.sessionId) {
     return handleVerifyEmailOtp(req, res);
   }

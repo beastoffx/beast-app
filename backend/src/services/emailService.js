@@ -161,7 +161,7 @@ class EmailService {
    */
   static async initiateVerification({ studentIdNumber, googleUid }) {
     // 1. Fetch student and verified email strictly from trusted database
-    const student = get(
+    const student = await get(
       `SELECT sp.*, u.id as user_id, u.email, u.name, u.status, u.is_active, u.role
        FROM student_profiles sp
        JOIN users u ON sp.user_id = u.id
@@ -189,7 +189,7 @@ class EmailService {
     const id = `ev-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
 
     // 2. Store in email_verifications table (hashed only, never plaintext)
-    run(
+    await run(
       `INSERT INTO email_verifications 
        (id, email, otp_hash, session_id, student_id_number, google_uid, expires_at, is_verified, attempts)
        VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)`,
@@ -229,8 +229,8 @@ class EmailService {
   /**
    * Verifies an Email OTP code for a given session
    */
-  static verifyOtp({ sessionId, otpCode, studentIdNumber, googleUid }) {
-    const session = get(
+  static async verifyOtp({ sessionId, otpCode, studentIdNumber, googleUid }) {
+    const session = await get(
       `SELECT * FROM email_verifications WHERE session_id = ?`,
       [sessionId]
     );
@@ -262,7 +262,7 @@ class EmailService {
     // Compare hash
     const submittedHash = this.hashOtp(otpCode.trim());
     if (submittedHash !== session.otp_hash) {
-      run(
+      await run(
         `UPDATE email_verifications SET attempts = attempts + 1 WHERE session_id = ?`,
         [sessionId]
       );
@@ -270,7 +270,7 @@ class EmailService {
     }
 
     // Mark verified
-    run(
+    await run(
       `UPDATE email_verifications SET is_verified = 1 WHERE session_id = ?`,
       [sessionId]
     );

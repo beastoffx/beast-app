@@ -7,7 +7,7 @@ const { logAudit } = require('../middleware/audit');
 const router = express.Router();
 
 // GET /api/notices - Scoped to user role and enrolled batch
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   const user = req.user;
   let sql = `
     SELECT n.*, u.name as author_name, u.role as author_role
@@ -42,12 +42,12 @@ router.get('/', authenticateToken, (req, res) => {
 
   sql += ` ORDER BY n.is_pinned DESC, n.publish_date DESC, n.created_at DESC`;
 
-  const notices = query(sql, params);
+  const notices = await query(sql, params);
   res.json({ success: true, data: notices });
 });
 
 // POST /api/notices - Admin or authorized teacher creates notice
-router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), (req, res) => {
+router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), async (req, res) => {
   const { title, description, category, priority, target_type, target_id, attachment_url, is_pinned } = req.body;
 
   if (!title || !description || !category) {
@@ -62,7 +62,7 @@ router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), (req, re
   const id = 'notice-' + Date.now();
   const publishDate = new Date().toISOString().split('T')[0];
 
-  run(
+  await run(
     `INSERT INTO notices (id, title, description, category, priority, target_type, target_id, author_id, publish_date, is_pinned)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
@@ -79,14 +79,14 @@ router.post('/', authenticateToken, authorizeRoles('admin', 'teacher'), (req, re
     ]
   );
 
-  logAudit(req.user.id, 'PUBLISH_NOTICE', 'notices', id, { title, category, priority }, req);
+  await logAudit(req.user.id, 'PUBLISH_NOTICE', 'notices', id, { title, category, priority }, req);
   res.json({ success: true, message: 'Notice published successfully.', id });
 });
 
 // DELETE /api/notices/:id
-router.delete('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (req, res) => {
+router.delete('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), async (req, res) => {
   const { id } = req.params;
-  const notice = get('SELECT * FROM notices WHERE id = ?', [id]);
+  const notice = await get('SELECT * FROM notices WHERE id = ?', [id]);
   if (!notice) {
     return res.status(404).json({ success: false, error: 'Notice not found.' });
   }
@@ -95,8 +95,8 @@ router.delete('/:id', authenticateToken, authorizeRoles('admin', 'teacher'), (re
     return res.status(403).json({ success: false, error: 'You are not authorized to delete another author\'s notice.' });
   }
 
-  run('DELETE FROM notices WHERE id = ?', [id]);
-  logAudit(req.user.id, 'DELETE_NOTICE', 'notices', id, {}, req);
+  await run('DELETE FROM notices WHERE id = ?', [id]);
+  await logAudit(req.user.id, 'DELETE_NOTICE', 'notices', id, {}, req);
   res.json({ success: true, message: 'Notice deleted successfully.' });
 });
 

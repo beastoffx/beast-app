@@ -6,11 +6,11 @@ const { authorizeRoles } = require('../middleware/rbac');
 const router = express.Router();
 
 // GET /api/dashboard/student
-router.get('/student', authenticateToken, authorizeRoles('student'), (req, res) => {
+router.get('/student', authenticateToken, authorizeRoles('student'), async (req, res) => {
   const studentId = req.user.id;
 
   // Student profile and batch
-  const profile = get(
+  const profile = await get(
     `SELECT sp.*, b.name as batch_name, c.name as class_name
      FROM student_profiles sp
      LEFT JOIN batches b ON sp.batch_id = b.id
@@ -26,7 +26,7 @@ router.get('/student', authenticateToken, authorizeRoles('student'), (req, res) 
   const currentDayOfWeek = todayJs === 0 ? 7 : todayJs;
   const currentTime = new Date().toTimeString().substring(0, 5);
 
-  const todayClasses = query(
+  const todayClasses = await query(
     `SELECT t.*, s.name as subject_name, s.code as subject_code, u.name as teacher_name
      FROM timetables t
      JOIN subjects s ON t.subject_id = s.id
@@ -39,7 +39,7 @@ router.get('/student', authenticateToken, authorizeRoles('student'), (req, res) 
   const nextClass = todayClasses.find(c => c.start_time >= currentTime) || null;
 
   // Attendance summary
-  const attStats = get(
+  const attStats = await get(
     `SELECT
        COUNT(*) as total,
        SUM(CASE WHEN status = 'present' OR status = 'late' THEN 1 ELSE 0 END) as attended
@@ -51,7 +51,7 @@ router.get('/student', authenticateToken, authorizeRoles('student'), (req, res) 
   const attendancePercentage = totalClasses > 0 ? Math.round((attended / totalClasses) * 1000) / 10 : 100.0;
 
   // Pending assignments
-  const pendingAssignments = query(
+  const pendingAssignments = await query(
     `SELECT a.*, s.name as subject_name
      FROM assignments a
      JOIN subjects s ON a.subject_id = s.id
@@ -63,7 +63,7 @@ router.get('/student', authenticateToken, authorizeRoles('student'), (req, res) 
   );
 
   // Recent notices (top 3)
-  const recentNotices = query(
+  const recentNotices = await query(
     `SELECT * FROM notices
      WHERE target_type = 'all' OR (target_type = 'batch' AND target_id = ?)
      ORDER BY is_pinned DESC, publish_date DESC
@@ -72,7 +72,7 @@ router.get('/student', authenticateToken, authorizeRoles('student'), (req, res) 
   );
 
   // Upcoming exams (next 30 days)
-  const upcomingExams = query(
+  const upcomingExams = await query(
     `SELECT e.*, es.exam_date, es.start_time, s.name as subject_name
      FROM exams e
      JOIN exam_subjects es ON e.id = es.exam_id
@@ -85,7 +85,7 @@ router.get('/student', authenticateToken, authorizeRoles('student'), (req, res) 
   );
 
   // Recent materials
-  const recentMaterials = query(
+  const recentMaterials = await query(
     `SELECT m.*, s.name as subject_name
      FROM study_materials m
      JOIN subjects s ON m.subject_id = s.id
@@ -96,10 +96,11 @@ router.get('/student', authenticateToken, authorizeRoles('student'), (req, res) 
   );
 
   // Open doubts count
-  const openDoubtsCount = get(
+  const openDoubtsRow = await get(
     `SELECT COUNT(*) as count FROM doubts WHERE student_id = ? AND status != 'resolved'`,
     [studentId]
-  ).count || 0;
+  );
+  const openDoubtsCount = openDoubtsRow.count || 0;
 
   res.json({
     success: true,
@@ -119,7 +120,7 @@ router.get('/student', authenticateToken, authorizeRoles('student'), (req, res) 
 });
 
 // GET /api/dashboard/teacher
-router.get('/teacher', authenticateToken, authorizeRoles('teacher'), (req, res) => {
+router.get('/teacher', authenticateToken, authorizeRoles('teacher'), async (req, res) => {
   const teacherId = req.user.id;
 
   // Today's classes
@@ -128,7 +129,7 @@ router.get('/teacher', authenticateToken, authorizeRoles('teacher'), (req, res) 
   const currentTime = new Date().toTimeString().substring(0, 5);
   const todayStr = new Date().toISOString().split('T')[0];
 
-  const todayClasses = query(
+  const todayClasses = await query(
     `SELECT t.*, s.name as subject_name, b.name as batch_name,
             (SELECT COUNT(*) FROM attendance a WHERE a.batch_id = t.batch_id AND a.subject_id = t.subject_id AND a.date = ?) as attendance_taken
      FROM timetables t
@@ -142,7 +143,7 @@ router.get('/teacher', authenticateToken, authorizeRoles('teacher'), (req, res) 
   const nextClass = todayClasses.find(c => c.start_time >= currentTime) || null;
 
   // Assigned batches
-  const assignedBatches = query(
+  const assignedBatches = await query(
     `SELECT DISTINCT b.id, b.name, c.name as class_name, s.name as subject_name, s.id as subject_id
      FROM teacher_assignments ta
      JOIN batches b ON ta.batch_id = b.id
@@ -153,7 +154,7 @@ router.get('/teacher', authenticateToken, authorizeRoles('teacher'), (req, res) 
   );
 
   // Submissions to review
-  const pendingReviews = query(
+  const pendingReviews = await query(
     `SELECT sub.*, a.title as assignment_title, u.name as student_name
      FROM assignment_submissions sub
      JOIN assignments a ON sub.assignment_id = a.id
@@ -165,7 +166,7 @@ router.get('/teacher', authenticateToken, authorizeRoles('teacher'), (req, res) 
   );
 
   // Pending doubts
-  const pendingDoubts = query(
+  const pendingDoubts = await query(
     `SELECT d.*, s.name as subject_name, u.name as student_name
      FROM doubts d
      JOIN subjects s ON d.subject_id = s.id
@@ -178,7 +179,7 @@ router.get('/teacher', authenticateToken, authorizeRoles('teacher'), (req, res) 
   );
 
   // Notices
-  const recentNotices = query('SELECT * FROM notices ORDER BY publish_date DESC LIMIT 3');
+  const recentNotices = await query('SELECT * FROM notices ORDER BY publish_date DESC LIMIT 3');
 
   res.json({
     success: true,
@@ -196,44 +197,52 @@ router.get('/teacher', authenticateToken, authorizeRoles('teacher'), (req, res) 
 });
 
 // GET /api/dashboard/admin
-router.get('/admin', authenticateToken, authorizeRoles('admin'), (req, res) => {
+router.get('/admin', authenticateToken, authorizeRoles('admin'), async (req, res) => {
   const todayJs = new Date().getDay();
   const currentDayOfWeek = todayJs === 0 ? 7 : todayJs;
   const todayStr = new Date().toISOString().split('T')[0];
 
   // Actionable TODAY Metrics
   // 1. Classes scheduled today
-  const todayClassesCount = get(
+  const todayClassesRow = await get(
     'SELECT COUNT(*) as count FROM timetables WHERE day_of_week = ?',
     [currentDayOfWeek]
-  ).count || 0;
+  );
+  const todayClassesCount = todayClassesRow.count || 0;
 
   // 2. Attendance records taken today
-  const attendanceMarkedToday = get(
+  const attendanceRow = await get(
     'SELECT COUNT(DISTINCT batch_id || subject_id) as count FROM attendance WHERE date = ?',
     [todayStr]
-  ).count || 0;
+  );
+  const attendanceMarkedToday = attendanceRow.count || 0;
 
   const attendancePendingCount = Math.max(0, todayClassesCount - attendanceMarkedToday);
 
   // 3. Submissions pending review
-  const assignmentsPendingReview = get(
+  const reviewRow = await get(
     `SELECT COUNT(*) as count FROM assignment_submissions WHERE status = 'submitted'`
-  ).count || 0;
+  );
+  const assignmentsPendingReview = reviewRow.count || 0;
 
   // 4. Open doubts
-  const openDoubtsCount = get(
+  const doubtsRow = await get(
     `SELECT COUNT(*) as count FROM doubts WHERE status = 'open'`
-  ).count || 0;
+  );
+  const openDoubtsCount = doubtsRow.count || 0;
 
   // 5. Total counts
-  const totalStudents = get(`SELECT COUNT(*) as count FROM users WHERE role = 'student' AND is_active = 1`).count || 0;
-  const totalTeachers = get(`SELECT COUNT(*) as count FROM users WHERE role = 'teacher' AND is_active = 1`).count || 0;
-  const totalBatches = get(`SELECT COUNT(*) as count FROM batches`).count || 0;
-  const totalClasses = get(`SELECT COUNT(*) as count FROM classes`).count || 0;
+  const studentsRow = await get(`SELECT COUNT(*) as count FROM users WHERE role = 'student' AND is_active = 1`);
+  const totalStudents = studentsRow.count || 0;
+  const teachersRow = await get(`SELECT COUNT(*) as count FROM users WHERE role = 'teacher' AND is_active = 1`);
+  const totalTeachers = teachersRow.count || 0;
+  const batchesRow = await get(`SELECT COUNT(*) as count FROM batches`);
+  const totalBatches = batchesRow.count || 0;
+  const classesRow = await get(`SELECT COUNT(*) as count FROM classes`);
+  const totalClasses = classesRow.count || 0;
 
   // 6. Recent audit logs
-  const recentAudit = query(
+  const recentAudit = await query(
     `SELECT a.*, u.name as user_name
      FROM audit_logs a
      LEFT JOIN users u ON a.user_id = u.id
@@ -242,7 +251,7 @@ router.get('/admin', authenticateToken, authorizeRoles('admin'), (req, res) => {
   );
 
   // 7. Recent Notices
-  const recentNotices = query('SELECT * FROM notices ORDER BY publish_date DESC LIMIT 3');
+  const recentNotices = await query('SELECT * FROM notices ORDER BY publish_date DESC LIMIT 3');
 
   res.json({
     success: true,
