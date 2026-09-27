@@ -3,8 +3,8 @@
   "outputDirectory": "frontend/build/web",
   "rewrites": [
     {
-      "source": "/api/:match*",
-      "destination": "https://beast-academy-api.onrender.com/api/:match*"
+      "source": "/api/(.*)",
+      "destination": "https://beast-academy-api.onrender.com/api/$1"
     },
     {
       "source": "/((?!api/).*)",
