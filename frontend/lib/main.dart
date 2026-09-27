@@ -35,6 +35,15 @@ class BeastAcademyApp extends StatelessWidget {
       title: 'B.E.A.S.T ACADEMY',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
+      builder: (context, child) {
+        return DefaultTextStyle.merge(
+          style: const TextStyle(
+            fontFamily: 'SpaceGrotesk',
+            fontFamilyFallback: ['SpaceGrotesk', 'sans-serif'],
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: const MainPortalScreen(),
     );
   }

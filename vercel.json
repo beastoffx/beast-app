@@ -3,6 +3,14 @@
   "outputDirectory": "frontend/build/web",
   "rewrites": [
     {
+      "source": "/assets/fonts/(.*)",
+      "destination": "/assets/assets/fonts/$1"
+    },
+    {
+      "source": "/fonts/(.*)",
+      "destination": "/assets/assets/fonts/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

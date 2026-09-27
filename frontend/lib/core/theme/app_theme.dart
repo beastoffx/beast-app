@@ -54,8 +54,15 @@ class AppTheme {
         onError: BeastColors.white,
       ),
       fontFamily: 'SpaceGrotesk',
-      textTheme: _buildTextTheme(),
-      primaryTextTheme: _buildTextTheme(),
+      fontFamilyFallback: const ['SpaceGrotesk', 'sans-serif'],
+      textTheme: _buildTextTheme().apply(
+        fontFamily: 'SpaceGrotesk',
+        fontFamilyFallback: const ['SpaceGrotesk', 'sans-serif'],
+      ),
+      primaryTextTheme: _buildTextTheme().apply(
+        fontFamily: 'SpaceGrotesk',
+        fontFamilyFallback: const ['SpaceGrotesk', 'sans-serif'],
+      ),
       appBarTheme: const AppBarTheme(
         backgroundColor: BeastColors.white,
         foregroundColor: BeastColors.textPrimary,
@@ -159,22 +166,23 @@ class AppTheme {
 
   static TextTheme _buildTextTheme() {
     const String font = 'SpaceGrotesk';
+    const List<String> fallback = ['SpaceGrotesk', 'sans-serif'];
     return const TextTheme(
-      displayLarge: TextStyle(fontFamily: font, fontSize: 32, fontWeight: FontWeight.w800, color: BeastColors.textPrimary, letterSpacing: -0.6),
-      displayMedium: TextStyle(fontFamily: font, fontSize: 28, fontWeight: FontWeight.w800, color: BeastColors.textPrimary, letterSpacing: -0.5),
-      displaySmall: TextStyle(fontFamily: font, fontSize: 24, fontWeight: FontWeight.w700, color: BeastColors.textPrimary, letterSpacing: -0.4),
-      headlineLarge: TextStyle(fontFamily: font, fontSize: 22, fontWeight: FontWeight.w700, color: BeastColors.textPrimary, letterSpacing: -0.4),
-      headlineMedium: TextStyle(fontFamily: font, fontSize: 20, fontWeight: FontWeight.w700, color: BeastColors.textPrimary, letterSpacing: -0.3),
-      headlineSmall: TextStyle(fontFamily: font, fontSize: 18, fontWeight: FontWeight.w600, color: BeastColors.textPrimary, letterSpacing: -0.2),
-      titleLarge: TextStyle(fontFamily: font, fontSize: 18, fontWeight: FontWeight.w600, color: BeastColors.textPrimary, letterSpacing: -0.2),
-      titleMedium: TextStyle(fontFamily: font, fontSize: 16, fontWeight: FontWeight.w600, color: BeastColors.textPrimary, letterSpacing: -0.1),
-      titleSmall: TextStyle(fontFamily: font, fontSize: 14, fontWeight: FontWeight.w600, color: BeastColors.textPrimary, letterSpacing: 0),
-      bodyLarge: TextStyle(fontFamily: font, fontSize: 16, fontWeight: FontWeight.w400, color: BeastColors.textPrimary),
-      bodyMedium: TextStyle(fontFamily: font, fontSize: 14, fontWeight: FontWeight.w400, color: BeastColors.textPrimary),
-      bodySmall: TextStyle(fontFamily: font, fontSize: 12, fontWeight: FontWeight.w400, color: BeastColors.textSecondary),
-      labelLarge: TextStyle(fontFamily: font, fontSize: 14, fontWeight: FontWeight.w600, color: BeastColors.textPrimary, letterSpacing: 0.1),
-      labelMedium: TextStyle(fontFamily: font, fontSize: 12, fontWeight: FontWeight.w600, color: BeastColors.textSecondary, letterSpacing: 0.2),
-      labelSmall: TextStyle(fontFamily: font, fontSize: 11, fontWeight: FontWeight.w500, color: BeastColors.textMuted, letterSpacing: 0.3),
+      displayLarge: TextStyle(fontFamily: font, fontFamilyFallback: fallback, fontSize: 32, fontWeight: FontWeight.w800, color: BeastColors.textPrimary, letterSpacing: -0.6),
+      displayMedium: TextStyle(fontFamily: font, fontFamilyFallback: fallback, fontSize: 28, fontWeight: FontWeight.w800, color: BeastColors.textPrimary, letterSpacing: -0.5),
+      displaySmall: TextStyle(fontFamily: font, fontFamilyFallback: fallback, fontSize: 24, fontWeight: FontWeight.w700, color: BeastColors.textPrimary, letterSpacing: -0.4),
+      headlineLarge: TextStyle(fontFamily: font, fontFamilyFallback: fallback, fontSize: 22, fontWeight: FontWeight.w700, color: BeastColors.textPrimary, letterSpacing: -0.4),
+      headlineMedium: TextStyle(fontFamily: font, fontFamilyFallback: fallback, fontSize: 20, fontWeight: FontWeight.w700, color: BeastColors.textPrimary, letterSpacing: -0.3),
+      headlineSmall: TextStyle(fontFamily: font, fontFamilyFallback: fallback, fontSize: 18, fontWeight: FontWeight.w600, color: BeastColors.textPrimary, letterSpacing: -0.2),
+      titleLarge: TextStyle(fontFamily: font, fontFamilyFallback: fallback, fontSize: 18, fontWeight: FontWeight.w600, color: BeastColors.textPrimary, letterSpacing: -0.2),
+      titleMedium: TextStyle(fontFamily: font, fontFamilyFallback: fallback, fontSize: 16, fontWeight: FontWeight.w600, color: BeastColors.textPrimary, letterSpacing: -0.1),
+      titleSmall: TextStyle(fontFamily: font, fontFamilyFallback: fallback, fontSize: 14, fontWeight: FontWeight.w600, color: BeastColors.textPrimary, letterSpacing: 0),
+      bodyLarge: TextStyle(fontFamily: font, fontFamilyFallback: fallback, fontSize: 16, fontWeight: FontWeight.w400, color: BeastColors.textPrimary),
+      bodyMedium: TextStyle(fontFamily: font, fontFamilyFallback: fallback, fontSize: 14, fontWeight: FontWeight.w400, color: BeastColors.textPrimary),
+      bodySmall: TextStyle(fontFamily: font, fontFamilyFallback: fallback, fontSize: 12, fontWeight: FontWeight.w400, color: BeastColors.textSecondary),
+      labelLarge: TextStyle(fontFamily: font, fontFamilyFallback: fallback, fontSize: 14, fontWeight: FontWeight.w600, color: BeastColors.textPrimary, letterSpacing: 0.1),
+      labelMedium: TextStyle(fontFamily: font, fontFamilyFallback: fallback, fontSize: 12, fontWeight: FontWeight.w600, color: BeastColors.textSecondary, letterSpacing: 0.2),
+      labelSmall: TextStyle(fontFamily: font, fontFamilyFallback: fallback, fontSize: 11, fontWeight: FontWeight.w500, color: BeastColors.textMuted, letterSpacing: 0.3),
     );
   }
 }

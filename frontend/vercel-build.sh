@@ -22,10 +22,16 @@ flutter pub get
 echo "Building Flutter Web in release mode..."
 flutter build web --release
 
+echo "Verifying and mirroring font assets across paths..."
+mkdir -p build/web/assets/fonts
+cp -r build/web/assets/assets/fonts/* build/web/assets/fonts/ 2>/dev/null || true
+mkdir -p build/web/fonts
+cp -r build/web/assets/assets/fonts/* build/web/fonts/ 2>/dev/null || true
+
 echo "Verifying build output:"
-if [ -f "build/web/index.html" ]; then
-  echo "SUCCESS: build/web/index.html exists."
+if [ -f "build/web/index.html" ] && [ -f "build/web/assets/assets/fonts/SpaceGrotesk-Regular.ttf" ]; then
+  echo "SUCCESS: build/web/index.html and Space Grotesk font files exist."
 else
-  echo "ERROR: build/web/index.html was not generated."
+  echo "ERROR: build/web/index.html or font files were not generated."
   exit 1
 fi
