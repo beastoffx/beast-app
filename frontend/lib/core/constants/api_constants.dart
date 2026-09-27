@@ -20,14 +20,15 @@ class ApiConstants {
       return _normalizeBaseUrl(_envBaseUrl);
     }
 
-    // 2. Release builds for Web and Mobile across the Internet use HTTPS production backend
-    if (kReleaseMode) {
-      return _normalizeBaseUrl(_defaultProductionUrl);
+    // 2. Web browser builds use relative root so requests route through the hosting proxy
+    // (eliminating cross-origin preflight failures while securely connecting to the production backend).
+    if (kIsWeb) {
+      return '';
     }
 
-    // 3. Local development mode
-    if (kIsWeb) {
-      return 'http://localhost:5000';
+    // 3. Android / Mobile release builds across the Internet use HTTPS production backend
+    if (kReleaseMode) {
+      return _normalizeBaseUrl(_defaultProductionUrl);
     }
 
     // 4. Android emulator development loopback (or adb reverse tcp:5000 tcp:5000 for local USB test)
