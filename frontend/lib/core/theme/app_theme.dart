@@ -53,7 +53,9 @@ class AppTheme {
         error: BeastColors.danger,
         onError: BeastColors.white,
       ),
-      fontFamily: 'Roboto',
+      fontFamily: 'SpaceGrotesk',
+      textTheme: _buildTextTheme(),
+      primaryTextTheme: _buildTextTheme(),
       appBarTheme: const AppBarTheme(
         backgroundColor: BeastColors.white,
         foregroundColor: BeastColors.textPrimary,
@@ -61,6 +63,7 @@ class AppTheme {
         centerTitle: false,
         scrolledUnderElevation: 1,
         titleTextStyle: TextStyle(
+          fontFamily: 'SpaceGrotesk',
           color: BeastColors.textPrimary,
           fontSize: 18,
           fontWeight: FontWeight.w700,
@@ -86,6 +89,7 @@ class AppTheme {
             borderRadius: BorderRadius.circular(BeastRadius.sm),
           ),
           textStyle: const TextStyle(
+            fontFamily: 'SpaceGrotesk',
             fontSize: 15,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.1,
@@ -101,6 +105,7 @@ class AppTheme {
             borderRadius: BorderRadius.circular(BeastRadius.sm),
           ),
           textStyle: const TextStyle(
+            fontFamily: 'SpaceGrotesk',
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -126,14 +131,50 @@ class AppTheme {
           borderRadius: BorderRadius.circular(BeastRadius.sm),
           borderSide: const BorderSide(color: BeastColors.danger, width: 1),
         ),
-        labelStyle: const TextStyle(color: BeastColors.textSecondary, fontSize: 14),
-        hintStyle: const TextStyle(color: BeastColors.textMuted, fontSize: 14),
+        labelStyle: const TextStyle(fontFamily: 'SpaceGrotesk', color: BeastColors.textSecondary, fontSize: 14),
+        hintStyle: const TextStyle(fontFamily: 'SpaceGrotesk', color: BeastColors.textMuted, fontSize: 14),
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: BeastColors.white,
+        titleTextStyle: TextStyle(
+          fontFamily: 'SpaceGrotesk',
+          color: BeastColors.textPrimary,
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+        ),
+        contentTextStyle: TextStyle(
+          fontFamily: 'SpaceGrotesk',
+          color: BeastColors.textPrimary,
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+        ),
       ),
       dividerTheme: const DividerThemeData(
         color: BeastColors.divider,
         thickness: 1,
         space: 1,
       ),
+    );
+  }
+
+  static TextTheme _buildTextTheme() {
+    const String font = 'SpaceGrotesk';
+    return const TextTheme(
+      displayLarge: TextStyle(fontFamily: font, fontSize: 32, fontWeight: FontWeight.w800, color: BeastColors.textPrimary, letterSpacing: -0.6),
+      displayMedium: TextStyle(fontFamily: font, fontSize: 28, fontWeight: FontWeight.w800, color: BeastColors.textPrimary, letterSpacing: -0.5),
+      displaySmall: TextStyle(fontFamily: font, fontSize: 24, fontWeight: FontWeight.w700, color: BeastColors.textPrimary, letterSpacing: -0.4),
+      headlineLarge: TextStyle(fontFamily: font, fontSize: 22, fontWeight: FontWeight.w700, color: BeastColors.textPrimary, letterSpacing: -0.4),
+      headlineMedium: TextStyle(fontFamily: font, fontSize: 20, fontWeight: FontWeight.w700, color: BeastColors.textPrimary, letterSpacing: -0.3),
+      headlineSmall: TextStyle(fontFamily: font, fontSize: 18, fontWeight: FontWeight.w600, color: BeastColors.textPrimary, letterSpacing: -0.2),
+      titleLarge: TextStyle(fontFamily: font, fontSize: 18, fontWeight: FontWeight.w600, color: BeastColors.textPrimary, letterSpacing: -0.2),
+      titleMedium: TextStyle(fontFamily: font, fontSize: 16, fontWeight: FontWeight.w600, color: BeastColors.textPrimary, letterSpacing: -0.1),
+      titleSmall: TextStyle(fontFamily: font, fontSize: 14, fontWeight: FontWeight.w600, color: BeastColors.textPrimary, letterSpacing: 0),
+      bodyLarge: TextStyle(fontFamily: font, fontSize: 16, fontWeight: FontWeight.w400, color: BeastColors.textPrimary),
+      bodyMedium: TextStyle(fontFamily: font, fontSize: 14, fontWeight: FontWeight.w400, color: BeastColors.textPrimary),
+      bodySmall: TextStyle(fontFamily: font, fontSize: 12, fontWeight: FontWeight.w400, color: BeastColors.textSecondary),
+      labelLarge: TextStyle(fontFamily: font, fontSize: 14, fontWeight: FontWeight.w600, color: BeastColors.textPrimary, letterSpacing: 0.1),
+      labelMedium: TextStyle(fontFamily: font, fontSize: 12, fontWeight: FontWeight.w600, color: BeastColors.textSecondary, letterSpacing: 0.2),
+      labelSmall: TextStyle(fontFamily: font, fontSize: 11, fontWeight: FontWeight.w500, color: BeastColors.textMuted, letterSpacing: 0.3),
     );
   }
 }

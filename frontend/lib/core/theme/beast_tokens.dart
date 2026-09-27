@@ -177,7 +177,10 @@ class BeastBreakpoints {
 }
 
 class BeastTypography {
+  static const String fontFamily = 'SpaceGrotesk';
+
   static const TextStyle display = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 28,
     fontWeight: FontWeight.w800,
     color: BeastColors.textPrimary,
@@ -186,6 +189,7 @@ class BeastTypography {
   );
 
   static const TextStyle headline = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 22,
     fontWeight: FontWeight.w700,
     color: BeastColors.textPrimary,
@@ -194,6 +198,7 @@ class BeastTypography {
   );
 
   static const TextStyle title = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 18,
     fontWeight: FontWeight.w600,
     color: BeastColors.textPrimary,
@@ -202,6 +207,7 @@ class BeastTypography {
   );
 
   static const TextStyle subtitle = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 15,
     fontWeight: FontWeight.w500,
     color: BeastColors.textSecondary,
@@ -210,6 +216,7 @@ class BeastTypography {
   );
 
   static const TextStyle body = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w400,
     color: BeastColors.textPrimary,
@@ -218,6 +225,7 @@ class BeastTypography {
   );
 
   static const TextStyle bodyMedium = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w500,
     color: BeastColors.textPrimary,
@@ -226,6 +234,7 @@ class BeastTypography {
   );
 
   static const TextStyle label = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w600,
     color: BeastColors.textSecondary,
@@ -234,6 +243,7 @@ class BeastTypography {
   );
 
   static const TextStyle caption = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 11,
     fontWeight: FontWeight.w400,
     color: BeastColors.textMuted,
@@ -242,6 +252,7 @@ class BeastTypography {
   );
 
   static const TextStyle metric = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 26,
     fontWeight: FontWeight.w800,
     color: BeastColors.textPrimary,
@@ -250,6 +261,7 @@ class BeastTypography {
   );
 
   static const TextStyle metricLarge = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 34,
     fontWeight: FontWeight.w900,
     color: BeastColors.textPrimary,
