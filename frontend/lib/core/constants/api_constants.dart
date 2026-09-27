@@ -20,18 +20,13 @@ class ApiConstants {
       return _normalizeBaseUrl(_envBaseUrl);
     }
 
-    // 2. Web browser builds use relative root so requests route through the hosting proxy
-    // (eliminating cross-origin preflight failures while securely connecting to the production backend).
-    if (kIsWeb) {
-      return '';
-    }
-
-    // 3. Android / Mobile release builds across the Internet use HTTPS production backend
-    if (kReleaseMode) {
+    // 2. Both Web and Mobile across the Internet use the official production Render backend:
+    // https://beast-academy-api.onrender.com/api
+    if (kReleaseMode || kIsWeb) {
       return _normalizeBaseUrl(_defaultProductionUrl);
     }
 
-    // 4. Android emulator development loopback (or adb reverse tcp:5000 tcp:5000 for local USB test)
+    // 3. Android emulator development loopback (or adb reverse tcp:5000 tcp:5000 for local USB test)
     return 'http://10.0.2.2:5000';
   }
 

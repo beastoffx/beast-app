@@ -34,21 +34,24 @@ function createApp() {
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' }
   }));
-  // Production-grade CORS policy
+  // Production-grade CORS policy supporting mobile apps and authorized web clients
   const allowedOrigins = config.corsOrigins || [];
   app.use(cors({
     origin: (origin, callback) => {
       // 1. Allow mobile apps and native non-browser clients (which do not send an Origin header)
       if (!origin) return callback(null, true);
 
-      // 2. Allow local development origins in development/test environments
-      if (config.nodeEnv !== 'production') {
-        if (/^https?:\/\/localhost(:\d+)?$/.test(origin) || /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) {
-          return callback(null, true);
-        }
+      // 2. Allow local development origins (localhost, 127.0.0.1 on any port)
+      if (/^https?:\/\/localhost(:\d+)?$/.test(origin) || /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) {
+        return callback(null, true);
       }
 
-      // 3. Allow explicitly configured production origins
+      // 3. Allow official Vercel web deployments (*.vercel.app) and institutional domains
+      if (origin.endsWith('.vercel.app') || origin === 'https://beastacademy.edu') {
+        return callback(null, true);
+      }
+
+      // 4. Allow explicitly configured production origins from CORS_ORIGINS
       if (allowedOrigins.length > 0) {
         const isAllowed = allowedOrigins.some(allowed => {
           if (allowed === '*') return true;
@@ -59,16 +62,10 @@ function createApp() {
           return origin === allowed;
         });
         if (isAllowed) return callback(null, true);
-        return callback(new Error(`Origin ${origin} is not allowed by CORS policy.`));
       }
 
-      // Default in non-production with no origins configured: allow
-      if (config.nodeEnv !== 'production') {
-        return callback(null, true);
-      }
-
-      // Production default with no origins specified: reject unknown browser origins
-      return callback(new Error(`Origin ${origin} is not allowed by CORS policy.`));
+      // Safe reject without throwing unhandled 500 error in Express pipeline
+      return callback(null, false);
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],

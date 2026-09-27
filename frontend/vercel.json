@@ -3,11 +3,7 @@
   "outputDirectory": "build/web",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "https://beast-academy-api.onrender.com/api/$1"
-    },
-    {
-      "source": "/((?!api/).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
